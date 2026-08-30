@@ -64,7 +64,7 @@ export interface CreateDeductionApiResponse {
 
 export interface Deduction {
   id: string;
-  uuid: string;
+  uuid?: string;
   customer: string;
   employer: string;
   serviceNumber: string;

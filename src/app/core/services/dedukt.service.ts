@@ -334,6 +334,7 @@ export class DeduktService {
   private deductions = signal<Deduction[]>([
     {
       id: 'DED-1001',
+      uuid: 'DED-1001',
       customer: 'Oluwaseun Babatunde Adeyemi',
       employer: 'Federal Ministry of Finance',
       serviceNumber: 'SN-994821',
@@ -350,6 +351,7 @@ export class DeduktService {
     },
     {
       id: 'DED-1002',
+      uuid: 'DED-1002',
       customer: 'Inspector Chinedu Okonkwo',
       employer: 'Nigerian Police Force',
       serviceNumber: 'NPF-SN-44921',
@@ -366,6 +368,7 @@ export class DeduktService {
     },
     {
       id: 'DED-1003',
+      uuid: 'DED-1003',
       customer: 'Dr. Amina Garba Bello',
       employer: 'Federal Ministry of Health',
       serviceNumber: 'FMH-SN-10294',
@@ -382,6 +385,7 @@ export class DeduktService {
     },
     {
       id: 'DED-1004',
+      uuid: 'DED-1004',
       customer: 'Jamie Ellis',
       employer: 'Federal Inland Revenue Service (FIRS)',
       serviceNumber: 'FIRS-SN-7729',
@@ -398,6 +402,7 @@ export class DeduktService {
     },
     {
       id: 'DED-1005',
+      uuid: 'DED-1005',
       customer: 'Drew Carter',
       employer: 'Nigerian Ports Authority (NPA)',
       serviceNumber: 'NPA-SN-5519',
@@ -540,6 +545,7 @@ export class DeduktService {
 
     const newDeduction: Deduction = {
       id: newId,
+      uuid: newId,
       customer: request.customer,
       employer: request.employer,
       serviceNumber: request.serviceNumber,
