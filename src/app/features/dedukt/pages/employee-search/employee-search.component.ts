@@ -4,6 +4,7 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { DeduktService } from '../../../../core/services/dedukt.service';
 import { Employee } from '../../../../core/models/employee.model';
 import { Deduction } from '../../../../core/models/deduction.model';
+import { Bank } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
 import { CreateDeductionModalComponent } from '../../components/create-deduction-modal/create-deduction-modal.component';
@@ -25,6 +26,22 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
       <!-- Screen Title -->
       <div>
         <h1 class="text-2xl font-extrabold text-[#081A4D] tracking-tight">Search Employees</h1>
+      </div>
+
+      <!-- Cost / Charges Notice -->
+      <div class="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-5 py-4 shadow-sm">
+        <div class="flex-shrink-0 mt-0.5">
+          <svg class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3l9.09 16.91H2.91L12 3z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm font-bold text-amber-800">Charges Apply</p>
+          <p class="text-xs text-amber-700 mt-0.5">
+            Each employee verification search attracts a service charge that will be debited from your Dedukt wallet. 
+            Please ensure your wallet is adequately funded before proceeding.
+          </p>
+        </div>
       </div>
 
       <!-- Main Container -->
@@ -69,7 +86,7 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                 <span class="text-rose-500 font-bold">*</span> Criteria
               </label>
               <div class="relative">
-                <select formControlName="criteria" class="dedukt-input appearance-none bg-white pr-10">
+                <select formControlName="criteria" (change)="onCriteriaChange()" class="dedukt-input appearance-none bg-white pr-10">
                   <option value="Service Number">Service Number</option>
                   <option value="Account Number">Account Number</option>
                 </select>
@@ -81,35 +98,53 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
               </div>
             </div>
 
-            <!-- Bank ID (Visible when Account Number is selected) -->
+            <!-- Bank Selection (Visible when Account Number is selected) -->
             @if (searchForm.get('criteria')?.value === 'Account Number') {
               <div>
                 <label class="block text-sm font-semibold text-[#101828] mb-2">
-                  <span class="text-rose-500 font-bold">*</span> Bank ID
+                  <span class="text-rose-500 font-bold">*</span> Select Bank
                 </label>
-                <input 
-                  type="text" 
-                  formControlName="bankId"
-                  placeholder="e.g. 1 (or Bank Code)"
-                  class="dedukt-input"
-                />
+                <div class="relative">
+                  <select formControlName="bankId" class="dedukt-input appearance-none bg-white pr-10">
+                    <option value="" disabled>Select Bank</option>
+                    @for (bank of deduktService.banks(); track bank.id) {
+                      <option [value]="bank.id">{{ bank.name }}</option>
+                    }
+                  </select>
+                  <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#717680]">
+                    @if (deduktService.loadingBanks()) {
+                      <svg class="animate-spin w-4 h-4 text-[#008E97]" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                    } @else {
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    }
+                  </div>
+                </div>
+                @if (isFieldInvalid('bankId')) {
+                  <p class="text-xs text-rose-500 mt-1">Please select a bank</p>
+                }
               </div>
             }
 
-            <!-- Value (Input) -->
+            <!-- Value (Input: Account Number or Service Number) -->
             <div>
               <label class="block text-sm font-semibold text-[#101828] mb-2">
-                <span class="text-rose-500 font-bold">*</span> Value
+                <span class="text-rose-500 font-bold">*</span> 
+                {{ searchForm.get('criteria')?.value === 'Account Number' ? 'Account Number' : 'Service Number' }}
               </label>
               <input 
                 type="text" 
                 formControlName="value"
-                [placeholder]="searchForm.get('criteria')?.value === 'Account Number' ? 'e.g. 0021768987' : 'e.g. 01ED124420040389'"
+                [placeholder]="searchForm.get('criteria')?.value === 'Account Number' ? 'e.g. 0123984712 (10-digit NUBAN)' : 'e.g. 01ED124420040389 or SN-994821'"
                 class="dedukt-input font-mono"
                 [ngClass]="{'border-rose-500': isFieldInvalid('value')}"
               />
               @if (isFieldInvalid('value')) {
-                <p class="text-xs text-rose-500 mt-1">Please enter a search value</p>
+                <p class="text-xs text-rose-500 mt-1">Please enter a valid search value</p>
               }
             </div>
 
@@ -350,8 +385,8 @@ export class EmployeeSearchComponent implements OnInit {
   searchForm: FormGroup = this.fb.group({
     employer: ['', [Validators.required]],
     criteria: ['Service Number', [Validators.required]],
-    bankId: ['1'],
-    value: ['', [Validators.required]]
+    value: ['', [Validators.required]],
+    bankId: [''],
   });
 
   async ngOnInit() {
@@ -363,10 +398,26 @@ export class EmployeeSearchComponent implements OnInit {
         this.searchForm.patchValue({ employer: employers[0].uuid });
       }
     }
+    // Preload banks
+    const banks = await this.deduktService.loadBanks();
+    if (banks.length > 0 && !this.searchForm.get('bankId')?.value) {
+      this.searchForm.patchValue({ bankId: String(banks[0].id) });
+    }
   }
 
-  isFieldInvalid(field: string): boolean {
-    const control = this.searchForm.get(field);
+  async onCriteriaChange() {
+    const crit = this.searchForm.get('criteria')?.value;
+    if (crit === 'Account Number') {
+      const banks = await this.deduktService.loadBanks();
+      const currentBankId = this.searchForm.get('bankId')?.value;
+      if (!currentBankId && banks.length > 0) {
+        this.searchForm.patchValue({ bankId: String(banks[0].id) });
+      }
+    }
+  }
+
+  isFieldInvalid(fieldName: string): boolean {
+    const control = this.searchForm.get(fieldName);
     return !!(control && control.invalid && (control.dirty || control.touched));
   }
 
@@ -437,4 +488,3 @@ export class EmployeeSearchComponent implements OnInit {
     }
   }
 }
-

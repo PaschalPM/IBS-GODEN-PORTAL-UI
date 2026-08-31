@@ -15,11 +15,13 @@ import { AuthService } from '../../core/services/auth.service';
       <div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-[#D99A00]/10 blur-[130px] pointer-events-none"></div>
 
       <!-- Top Branding Header -->
-      <header class="w-full border-b border-[#1F242A] py-5 px-8 flex items-center justify-between z-10 backdrop-blur-md bg-[#0E0E0F]/80">
+      <header class="w-full border-b border-[#1F242A] py-4 px-8 flex items-center justify-between z-10 backdrop-blur-md bg-[#0E0E0F]/80">
         <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E09900] to-[#D99A00] flex items-center justify-center shadow-lg shadow-[#E09900]/20 font-bold text-black text-xl tracking-wider">
-            IBS
-          </div>
+          <img 
+            src="images/ibs-logo.jpg" 
+            alt="IBS Golden Logo" 
+            class="w-10 h-10 rounded-xl object-cover shadow-lg shadow-[#E09900]/20 border border-[#E09900]/40"
+          />
           <div>
             <h1 class="text-lg font-bold tracking-tight text-[#F9F8F7] flex items-center gap-2">
               IBS GOLDEN <span class="text-xs px-2 py-0.5 rounded bg-[#E09900]/20 text-[#E09900] border border-[#E09900]/30 font-medium">VERIFICATION PORTAL</span>
@@ -44,10 +46,12 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="absolute top-0 left-8 right-8 h-[2px] bg-gradient-to-r from-transparent via-[#E09900] to-transparent"></div>
 
           <div class="text-center mb-8">
-            <div class="inline-flex p-3 rounded-2xl bg-[#0E0E0F] border border-[#2A313A] mb-4 text-[#E09900]">
-              <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-              </svg>
+            <div class="inline-flex p-1 rounded-2xl bg-[#0E0E0F] border border-[#E09900]/30 mb-4 shadow-md shadow-[#E09900]/10 overflow-hidden">
+              <img 
+                src="images/ibs-logo.jpg" 
+                alt="IBS Golden" 
+                class="w-16 h-16 rounded-xl object-cover"
+              />
             </div>
             <h2 class="text-2xl font-bold text-[#F9F8F7]">Welcome to IBS Golden</h2>
             <p class="text-sm text-[#D9D9D9] mt-1.5">Enter your institutional credentials to access services</p>

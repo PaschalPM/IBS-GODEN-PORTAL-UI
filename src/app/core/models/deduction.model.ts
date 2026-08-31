@@ -29,16 +29,26 @@ export interface ApiDeduction {
   created_at: string;
 }
 
+export interface PaginationMeta {
+  current_page: number;
+  per_page: number;
+  total: number;
+  last_page: number;
+}
+
+export interface DeductionQueryParams {
+  page?: number;
+  per_page?: number;
+  search_text?: string;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface DeductionsListResponse {
   status: string;
   message: string;
   data: ApiDeduction[];
-  pagination?: {
-    current_page: number;
-    per_page: number;
-    total: number;
-    last_page: number;
-  };
+  pagination?: PaginationMeta;
 }
 
 export interface CreateDeductionApiRequest {
@@ -102,4 +112,3 @@ export interface CreateDeductionRequest {
   useDigiSign?: boolean;
   allowWhatsappSigning?: boolean;
 }
-

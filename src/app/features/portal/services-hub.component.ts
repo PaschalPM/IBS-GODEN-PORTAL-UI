@@ -15,9 +15,11 @@ import { AuthService } from '../../core/services/auth.service';
           
           <!-- Logo & Portal Title -->
           <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E09900] to-[#D99A00] flex items-center justify-center font-extrabold text-black text-lg shadow-md shadow-[#E09900]/20">
-              IBS
-            </div>
+            <img 
+              src="images/ibs-logo.jpg" 
+              alt="IBS Golden" 
+              class="w-10 h-10 rounded-xl object-cover shadow-md shadow-[#E09900]/20 border border-[#E09900]/40"
+            />
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-base font-bold tracking-tight text-[#F9F8F7]">IBS GOLDEN PORTAL</span>
@@ -33,7 +35,7 @@ import { AuthService } from '../../core/services/auth.service';
           <div class="flex items-center space-x-5">
             <div class="hidden sm:flex items-center space-x-3 pr-4 border-r border-[#1F242A]">
               <div class="w-9 h-9 rounded-full bg-[#1F242A] border border-[#E09900]/40 flex items-center justify-center text-[#E09900] font-bold text-sm">
-                GA
+                {{ (authService.currentUser()?.name || 'User').substring(0, 2).toUpperCase() }}
               </div>
               <div class="text-left">
                 <p class="text-xs font-semibold text-[#F9F8F7]">{{ authService.currentUser()?.name }}</p>
@@ -43,7 +45,7 @@ import { AuthService } from '../../core/services/auth.service';
 
             <button 
               (click)="authService.logout()"
-              class="flex items-center space-x-1.5 text-xs text-[#D9D9D9] hover:text-[#E09900] bg-[#1F242A] hover:bg-[#2A313A] px-3.5 py-2 rounded-lg border border-[#2E353E] transition-all"
+              class="flex items-center space-x-1.5 text-xs text-[#D9D9D9] hover:text-[#E09900] bg-[#1F242A] hover:bg-[#2A313A] px-3.5 py-2 rounded-lg border border-[#2E353E] transition-all cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -93,11 +95,15 @@ import { AuthService } from '../../core/services/auth.service';
           <!-- ACTIVE SERVICE: DEDUKT -->
           <div class="group relative bg-[#1F242A] hover:bg-[#252B33] border-2 border-[#008E97] rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 shadow-xl hover:shadow-[#008E97]/20 flex flex-col justify-between">
             
-            <!-- Top Status Ribbon -->
+            <!-- Top Status Ribbon with Dedukt Logo -->
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center space-x-3">
-                <div class="w-12 h-12 rounded-xl bg-[#081A4D] border border-[#0BA5EC]/40 flex items-center justify-center text-white font-black text-xl shadow-md">
-                  <span class="text-[#008E97]">D</span>
+                <div class="h-12 px-3.5 rounded-xl bg-white flex items-center justify-center shadow-md border border-[#008E97]/30">
+                  <img 
+                    src="images/dedukt-logo.png" 
+                    alt="Dedukt" 
+                    class="h-6 object-contain"
+                  />
                 </div>
                 <div>
                   <h3 class="text-lg font-bold text-white group-hover:text-[#0BA5EC] transition-colors">Dedukt</h3>
@@ -223,4 +229,3 @@ export class ServicesHubComponent {
     this.router.navigate(['/dedukt/search']);
   }
 }
-

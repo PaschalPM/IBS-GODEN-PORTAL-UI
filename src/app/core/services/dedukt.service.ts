@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
   Employee,
@@ -13,11 +13,19 @@ import {
   Deduction,
   ApiDeduction,
   DeductionsListResponse,
+  DeductionQueryParams,
   CreateDeductionApiRequest,
   CreateDeductionApiResponse,
   CreateDeductionRequest
 } from '../models/deduction.model';
-import { Cancellation } from '../models/cancellation.model';
+import {
+  Cancellation,
+  ApiCancellation,
+  CancellationsListResponse,
+  CancellationQueryParams
+} from '../models/cancellation.model';
+import { Bank, BanksResponse } from '../models/bank.model';
+import { WalletData, WalletBalanceResponse } from '../models/wallet.model';
 import { PortalUser, CreateUserDto, UserRole } from '../models/user.model';
 import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
@@ -88,19 +96,110 @@ function mapApiDeduction(item: ApiDeduction): Deduction {
   };
 }
 
+function mapApiCancellation(item: ApiCancellation): Cancellation {
+  return {
+    id: item.uuid || item.id || `CAN-${Math.floor(100 + Math.random() * 900)}`,
+    customer: item.customer || 'Customer',
+    serviceNumber: item.employee_service_number || item.serviceNumber || '',
+    loanAmount: item.loan_amount || item.loanAmount || 0,
+    tenor: item.tenor || 0,
+    repaymentAmount: item.repayment_amount || item.repaymentAmount || 0,
+    totalRepayment: item.total_repayment_amount || item.totalRepayment || 0,
+    cancelledAt: item.cancelled_at || item.cancelledAt || new Date().toISOString().split('T')[0],
+    cancellationReason: item.cancellation_reason || item.cancellationReason || 'Mandate Cancelled',
+    cancelledBy: item.cancelled_by || item.cancelledBy || 'System Admin',
+    originalDeductionId: item.original_deduction_id || item.originalDeductionId || ''
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class DeduktService {
-  // Employer list
+  // Signals
   readonly employers = signal<EmployerOption[]>([]);
   readonly loadingEmployers = signal<boolean>(false);
   readonly loadingDeductions = signal<boolean>(false);
+  readonly loadingCancellations = signal<boolean>(false);
+
+  readonly deductionsTotal = signal<number>(0);
+  readonly cancellationsTotal = signal<number>(0);
+
+  // Banks signals
+  readonly banks = signal<Bank[]>([]);
+  readonly loadingBanks = signal<boolean>(false);
+
+  // Wallet signals
+  readonly walletBalance = signal<number>(0);
+  readonly walletData = signal<WalletData | null>(null);
+  readonly loadingWallet = signal<boolean>(false);
 
   constructor(
     private http: HttpClient,
     private toastService: ToastService
   ) {}
+
+  // ── GET /dedukt/utilities/banks ──────────────────────────────────────────────
+  async loadBanks(): Promise<Bank[]> {
+
+    this.loadingBanks.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.http.get<BanksResponse>(`${environment.apiUrl}/dedukt/utilities/banks`)
+      );
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        this.banks.set(res.data);
+        return res.data;
+      }
+      throw new Error('Empty banks list from API');
+    } catch (err) {
+      console.warn('Failed to load banks from API, using fallback banks directory', err);
+      this.banks.set(this.fallbackBanks);
+      return this.fallbackBanks;
+    } finally {
+      this.loadingBanks.set(false);
+    }
+  }
+
+  // ── GET /dedukt/utilities/wallet-balance ──────────────────────────────────────
+  async loadWalletBalance(): Promise<number> {
+    this.loadingWallet.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.http.get<WalletBalanceResponse>(`${environment.apiUrl}/dedukt/utilities/wallet-balance`)
+      );
+
+      let numericBalance = 0;
+      if (typeof res?.data === 'number') {
+        numericBalance = res.data;
+      } else if (res?.data && typeof res.data === 'object') {
+        numericBalance = Number(
+          res.data.balance ??
+          res.data.wallet_balance ??
+          res.data.available_balance ??
+          0
+        );
+      }
+
+      this.walletBalance.set(numericBalance);
+      this.walletData.set({
+        balance: numericBalance,
+        currency: (typeof res?.data === 'object' && res.data?.currency) ? res.data.currency : 'NGN',
+        accountNumber: (typeof res?.data === 'object' && res.data?.account_number) ? res.data.account_number : '',
+        accountName: (typeof res?.data === 'object' && res.data?.account_name) ? res.data.account_name : '',
+        bankName: (typeof res?.data === 'object' && res.data?.bank_name) ? res.data.bank_name : '',
+        status: (typeof res?.data === 'object' && res.data?.status) ? res.data.status : 'Active',
+        lastUpdated: new Date().toLocaleTimeString()
+      });
+
+      return numericBalance;
+    } catch (err) {
+      console.warn('Failed to load wallet balance from API, using cached balance', err);
+      return this.walletBalance();
+    } finally {
+      this.loadingWallet.set(false);
+    }
+  }
 
   // ── GET /dedukt/employers?search_text= ────────────────────────────────────────
   async loadEmployers(searchText: string = ''): Promise<EmployerOption[]> {
@@ -122,22 +221,113 @@ export class DeduktService {
     }
   }
 
-  // ── GET /dedukt/deductions ───────────────────────────────────────────────────
-  async loadDeductions(): Promise<Deduction[]> {
+  // ── GET /dedukt/deductions (with Server-Side Pagination Query Params) ─────────
+  async loadDeductions(params?: DeductionQueryParams): Promise<Deduction[]> {
     this.loadingDeductions.set(true);
+
+    let httpParams = new HttpParams();
+    if (params?.page) httpParams = httpParams.set('page', params.page.toString());
+    if (params?.per_page) httpParams = httpParams.set('per_page', params.per_page.toString());
+    if (params?.search_text) httpParams = httpParams.set('search_text', params.search_text);
+    if (params?.start_date) httpParams = httpParams.set('start_date', params.start_date);
+    if (params?.end_date) httpParams = httpParams.set('end_date', params.end_date);
+
     try {
       const res = await firstValueFrom(
-        this.http.get<DeductionsListResponse>(`${environment.apiUrl}/dedukt/deductions`)
+        this.http.get<DeductionsListResponse>(`${environment.apiUrl}/dedukt/deductions`, {
+          params: httpParams
+        })
       );
       const mapped = (res.data || []).map(mapApiDeduction);
       this.deductions.set(mapped);
+      this.deductionsTotal.set(res.pagination?.total ?? mapped.length);
       return mapped;
     } catch (err: any) {
       const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load deductions.';
-      console.warn('Failed to load deductions from API', msg);
-      return this.deductions();
+      console.warn('Failed to load deductions from API, falling back to local dataset', msg);
+
+      let filtered = [...this.mockDeductions];
+      if (params?.search_text) {
+        const q = params.search_text.toLowerCase();
+        filtered = filtered.filter(d =>
+          d.customer.toLowerCase().includes(q) ||
+          d.serviceNumber.toLowerCase().includes(q) ||
+          d.referenceNumber.toLowerCase().includes(q)
+        );
+      }
+      if (params?.start_date) {
+        filtered = filtered.filter(d => !d.startDate || new Date(d.startDate) >= new Date(params.start_date!));
+      }
+      if (params?.end_date) {
+        filtered = filtered.filter(d => !d.endDate || new Date(d.endDate) <= new Date(params.end_date!));
+      }
+
+      this.deductionsTotal.set(filtered.length);
+
+      const page = params?.page || 1;
+      const perPage = params?.per_page || 10;
+      const startIdx = (page - 1) * perPage;
+      const paginated = filtered.slice(startIdx, startIdx + perPage);
+
+      this.deductions.set(paginated);
+      return paginated;
     } finally {
       this.loadingDeductions.set(false);
+    }
+  }
+
+  // ── GET /dedukt/cancellations (with Server-Side Pagination Query Params) ───────
+  async loadCancellations(params?: CancellationQueryParams): Promise<Cancellation[]> {
+    this.loadingCancellations.set(true);
+
+    let httpParams = new HttpParams();
+    if (params?.page) httpParams = httpParams.set('page', params.page.toString());
+    if (params?.per_page) httpParams = httpParams.set('per_page', params.per_page.toString());
+    if (params?.search_text) httpParams = httpParams.set('search_text', params.search_text);
+    if (params?.start_date) httpParams = httpParams.set('start_date', params.start_date);
+    if (params?.end_date) httpParams = httpParams.set('end_date', params.end_date);
+
+    try {
+      const res = await firstValueFrom(
+        this.http.get<CancellationsListResponse>(`${environment.apiUrl}/dedukt/cancellations`, {
+          params: httpParams
+        })
+      );
+      const mapped = (res.data || []).map(mapApiCancellation);
+      this.cancellations.set(mapped);
+      this.cancellationsTotal.set(res.pagination?.total ?? mapped.length);
+      return mapped;
+    } catch (err: any) {
+      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load cancellations.';
+      console.warn('Failed to load cancellations from API, falling back to local dataset', msg);
+
+      let filtered = [...this.mockCancellations];
+      if (params?.search_text) {
+        const q = params.search_text.toLowerCase();
+        filtered = filtered.filter(c =>
+          c.customer.toLowerCase().includes(q) ||
+          c.serviceNumber.toLowerCase().includes(q) ||
+          c.cancellationReason.toLowerCase().includes(q)
+        );
+      }
+      if (params?.start_date) {
+        filtered = filtered.filter(c => new Date(c.cancelledAt) >= new Date(params.start_date!));
+      }
+      if (params?.end_date) {
+        filtered = filtered.filter(c => new Date(c.cancelledAt) <= new Date(params.end_date!));
+      }
+
+      this.cancellationsTotal.set(filtered.length);
+
+      const page = params?.page || 1;
+      const perPage = params?.per_page || 10;
+      const startIdx = (page - 1) * perPage;
+      const paginated = filtered.slice(startIdx, startIdx + perPage);
+
+      this.cancellations.set(paginated);
+      return paginated;
+    } finally {
+      this.loadingCancellations.set(false);
     }
   }
 
@@ -207,14 +397,12 @@ export class DeduktService {
     const trimmedVal = (value || '').trim();
     if (!trimmedVal) return null;
 
-    // If companyUuid is provided, call real API
     if (companyUuid) {
       try {
         let endpoint = '';
         if (criteria === 'Account Number') {
           endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/banks/${bankId}/accounts/${encodeURIComponent(trimmedVal)}`;
         } else {
-          // Default to Service Number
           endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/${encodeURIComponent(trimmedVal)}`;
         }
 
@@ -233,7 +421,6 @@ export class DeduktService {
       }
     }
 
-    // Fallback search over local mock database if no companyUuid or offline
     return this.employees().find(emp => {
       if (criteria === 'Account Number') {
         return emp.accountNumber.toLowerCase().includes(trimmedVal.toLowerCase());
@@ -245,291 +432,126 @@ export class DeduktService {
     }) || null;
   }
 
+  // Fallback Banks List (88 Nigerian Banks)
+  readonly fallbackBanks: Bank[] = [
+    { id: 1, name: '9mobile 9Payment Service Bank', code: '120001' },
+    { id: 2, name: 'Abbey Mortgage Bank', code: '801' },
+    { id: 3, name: 'Above Only MFB', code: '51204' },
+    { id: 4, name: 'Abulesoro MFB', code: '51312' },
+    { id: 5, name: 'Access Bank', code: '044' },
+    { id: 6, name: 'Access Bank (Diamond)', code: '063' },
+    { id: 7, name: 'Airtel Smartcash PSB', code: '120004' },
+    { id: 8, name: 'ALAT by WEMA', code: '035A' },
+    { id: 9, name: 'Amju Unique MFB', code: '50926' },
+    { id: 10, name: 'Aramoko MFB', code: '50083' },
+    { id: 11, name: 'ASO Savings and Loans', code: '401' },
+    { id: 12, name: 'Astrapolaris MFB LTD', code: 'MFB50094' },
+    { id: 13, name: 'Bainescredit MFB', code: '51229' },
+    { id: 14, name: 'Bowen Microfinance Bank', code: '50931' },
+    { id: 15, name: 'Carbon', code: '565' },
+    { id: 16, name: 'CEMCS Microfinance Bank', code: '50823' },
+    { id: 17, name: 'Chanelle Microfinance Bank Limited', code: '50171' },
+    { id: 18, name: 'Citibank Nigeria', code: '023' },
+    { id: 19, name: 'Corestep MFB', code: '50204' },
+    { id: 20, name: 'Coronation Merchant Bank', code: '559' },
+    { id: 21, name: 'Crescent MFB', code: '51297' },
+    { id: 22, name: 'Ecobank Nigeria', code: '050' },
+    { id: 23, name: 'Ekimogun MFB', code: '50263' },
+    { id: 24, name: 'Ekondo Microfinance Bank', code: '562' },
+    { id: 25, name: 'Eyowo', code: '50126' },
+    { id: 26, name: 'Fidelity Bank', code: '070' },
+    { id: 27, name: 'Firmus MFB', code: '51314' },
+    { id: 28, name: 'First Bank of Nigeria', code: '011' },
+    { id: 29, name: 'First City Monument Bank', code: '214' },
+    { id: 30, name: 'FSDH Merchant Bank Limited', code: '501' },
+    { id: 31, name: 'Gateway Mortgage Bank LTD', code: '812' },
+    { id: 32, name: 'Globus Bank', code: '00103' },
+    { id: 33, name: 'GoMoney', code: '100022' },
+    { id: 34, name: 'Guaranty Trust Bank', code: '058' },
+    { id: 35, name: 'Hackman Microfinance Bank', code: '51251' },
+    { id: 36, name: 'Hasal Microfinance Bank', code: '50383' },
+    { id: 37, name: 'Heritage Bank', code: '030' },
+    { id: 38, name: 'HopePSB', code: '120002' },
+    { id: 39, name: 'Ibile Microfinance Bank', code: '51244' },
+    { id: 40, name: 'Ikoyi Osun MFB', code: '50439' },
+    { id: 41, name: 'Infinity MFB', code: '50457' },
+    { id: 42, name: 'Jaiz Bank', code: '301' },
+    { id: 43, name: 'Kadpoly MFB', code: '50502' },
+    { id: 44, name: 'Keystone Bank', code: '082' },
+    { id: 45, name: 'Kredi Money MFB LTD', code: '50200' },
+    { id: 46, name: 'Kuda Bank', code: '50211' },
+    { id: 47, name: 'Lagos Building Investment Company Plc.', code: '90052' },
+    { id: 48, name: 'Links MFB', code: '50549' },
+    { id: 49, name: 'Living Trust Mortgage Bank', code: '031' },
+    { id: 50, name: 'Lotus Bank', code: '303' },
+    { id: 51, name: 'Mayfair MFB', code: '50563' },
+    { id: 88, name: 'MICRO-FINANCE/AGRIC BANKS - ENUGU', code: null },
+    { id: 52, name: 'Mint MFB', code: '50304' },
+    { id: 53, name: 'MTN Momo PSB', code: '120003' },
+    { id: 54, name: 'Paga', code: '100002' },
+    { id: 55, name: 'PalmPay', code: '999991' },
+    { id: 56, name: 'Parallex Bank', code: '104' },
+    { id: 57, name: 'Parkway - ReadyCash', code: '311' },
+    { id: 58, name: 'Paycom', code: '999992' },
+    { id: 59, name: 'Petra Mircofinance Bank Plc', code: '50746' },
+    { id: 60, name: 'Polaris Bank', code: '076' },
+    { id: 61, name: 'Polyunwana MFB', code: '50864' },
+    { id: 62, name: 'PremiumTrust Bank', code: '105' },
+    { id: 63, name: 'Providus Bank', code: '101' },
+    { id: 64, name: 'QuickFund MFB', code: '51293' },
+    { id: 65, name: 'Rand Merchant Bank', code: '502' },
+    { id: 66, name: 'Refuge Mortgage Bank', code: '90067' },
+    { id: 67, name: 'Rubies MFB', code: '125' },
+    { id: 68, name: 'Safe Haven MFB', code: '51113' },
+    { id: 69, name: 'Solid Rock MFB', code: '50800' },
+    { id: 70, name: 'Sparkle Microfinance Bank', code: '51310' },
+    { id: 71, name: 'Stanbic IBTC Bank', code: '221' },
+    { id: 72, name: 'Standard Chartered Bank', code: '068' },
+    { id: 73, name: 'Stellas MFB', code: '51253' },
+    { id: 74, name: 'Sterling Bank', code: '232' },
+    { id: 75, name: 'Suntrust Bank', code: '100' },
+    { id: 76, name: 'TAJ Bank', code: '302' },
+    { id: 77, name: 'Tangerine Money', code: '51269' },
+    { id: 78, name: 'TCF MFB', code: '51211' },
+    { id: 79, name: 'Titan Bank', code: '102' },
+    { id: 80, name: 'Titan Paystack', code: '100039' },
+    { id: 81, name: 'Unical MFB', code: '50871' },
+    { id: 82, name: 'Union Bank of Nigeria', code: '032' },
+    { id: 83, name: 'United Bank For Africa (UBA)', code: '033' },
+    { id: 84, name: 'Unity Bank', code: '215' },
+    { id: 85, name: 'VFD Microfinance Bank Limited', code: '566' },
+    { id: 86, name: 'Wema Bank', code: '035' },
+    { id: 87, name: 'Zenith Bank', code: '057' }
+  ];
 
-  // Mock Employees Database
-  private employees = signal<Employee[]>([
-    {
-      id: 'emp-e01',
-      fullName: 'Oluwaseun Babatunde Adeyemi',
-      employer: 'Federal Ministry of Finance',
-      ippisNumber: 'IPPIS-774920',
-      staffNumber: 'STF/2018/8831',
-      accountNumber: '0123984712',
-      bankName: 'Guaranty Trust Bank',
-      serviceNumber: 'SN-994821',
-      retirementDate: '14 Oct 2038',
-      availableDeductibleBalance: 245000,
-      monthlyGrossSalary: 480000,
-      monthlyNetSalary: 395000,
-      gradeLevel: 'Grade Level 12 / Step 4',
-      ministryOrAgency: 'Budget Office of the Federation',
-      bvn: '22334455667',
-      phone: '08034567890',
-      email: 'o.adeyemi@finance.gov.ng',
-      status: 'Active'
-    },
-    {
-      id: 'emp-e02',
-      fullName: 'Inspector Chinedu Okonkwo',
-      employer: 'Nigerian Police Force',
-      ippisNumber: 'IPPIS-883910',
-      staffNumber: 'NPF/2015/4492',
-      accountNumber: '2049182736',
-      bankName: 'First Bank of Nigeria',
-      serviceNumber: 'NPF-SN-44921',
-      retirementDate: '28 Jul 2035',
-      availableDeductibleBalance: 180000,
-      monthlyGrossSalary: 350000,
-      monthlyNetSalary: 290000,
-      gradeLevel: 'Inspectorate II',
-      ministryOrAgency: 'Force Headquarters, Abuja',
-      bvn: '22889900112',
-      phone: '08123456789',
-      email: 'c.okonkwo@npf.gov.ng',
-      status: 'Active'
-    },
-    {
-      id: 'emp-e03',
-      fullName: 'Dr. Amina Garba Bello',
-      employer: 'Federal Ministry of Health',
-      ippisNumber: 'IPPIS-339281',
-      staffNumber: 'FMH/2012/1029',
-      accountNumber: '1098234710',
-      bankName: 'Zenith Bank',
-      serviceNumber: 'FMH-SN-10294',
-      retirementDate: '19 May 2041',
-      availableDeductibleBalance: 420000,
-      monthlyGrossSalary: 720000,
-      monthlyNetSalary: 590000,
-      gradeLevel: 'Grade Level 14 / Step 2',
-      ministryOrAgency: 'Department of Public Health',
-      bvn: '22119933445',
-      phone: '08098765432',
-      email: 'amina.bello@health.gov.ng',
-      status: 'Active'
-    },
-    {
-      id: 'emp-e04',
-      fullName: 'Riley Parker',
-      employer: 'Federal Ministry of Education',
-      ippisNumber: 'IPPIS-664019',
-      staffNumber: 'FME/2019/3321',
-      accountNumber: '3089124451',
-      bankName: 'Access Bank',
-      serviceNumber: 'FME-SN-33218',
-      retirementDate: '03 Nov 2044',
-      availableDeductibleBalance: 165000,
-      monthlyGrossSalary: 310000,
-      monthlyNetSalary: 260000,
-      gradeLevel: 'Grade Level 09 / Step 2',
-      ministryOrAgency: 'National Universities Commission',
-      bvn: '22446688001',
-      phone: '08129619267',
-      email: 'riley.parker@example.test',
-      status: 'Active'
-    }
-  ]);
+  // Local Employees Store
+  private employees = signal<Employee[]>([]);
 
-  // Mock Deductions Database
-  private deductions = signal<Deduction[]>([
-    {
-      id: 'DED-1001',
-      uuid: 'DED-1001',
-      customer: 'Oluwaseun Babatunde Adeyemi',
-      employer: 'Federal Ministry of Finance',
-      serviceNumber: 'SN-994821',
-      loanAmount: 1500000,
-      startDate: '01/15/2024',
-      endDate: '01/15/2025',
-      tenor: 12,
-      repaymentAmount: 145000,
-      totalRepayment: 1740000,
-      status: 'Active',
-      referenceNumber: 'REF-2024-0981',
-      description: 'Personal Asset Financing Facility',
-      createdAt: '2024-01-10'
-    },
-    {
-      id: 'DED-1002',
-      uuid: 'DED-1002',
-      customer: 'Inspector Chinedu Okonkwo',
-      employer: 'Nigerian Police Force',
-      serviceNumber: 'NPF-SN-44921',
-      loanAmount: 850000,
-      startDate: '03/01/2024',
-      endDate: '03/01/2025',
-      tenor: 12,
-      repaymentAmount: 82000,
-      totalRepayment: 984000,
-      status: 'Active',
-      referenceNumber: 'REF-2024-1142',
-      description: 'Consumer Loan Deduction',
-      createdAt: '2024-02-24'
-    },
-    {
-      id: 'DED-1003',
-      uuid: 'DED-1003',
-      customer: 'Dr. Amina Garba Bello',
-      employer: 'Federal Ministry of Health',
-      serviceNumber: 'FMH-SN-10294',
-      loanAmount: 3200000,
-      startDate: '05/01/2024',
-      endDate: '05/01/2026',
-      tenor: 24,
-      repaymentAmount: 165000,
-      totalRepayment: 3960000,
-      status: 'Active',
-      referenceNumber: 'REF-2024-2041',
-      description: 'Professional Improvement Loan',
-      createdAt: '2024-04-20'
-    },
-    {
-      id: 'DED-1004',
-      uuid: 'DED-1004',
-      customer: 'Jamie Ellis',
-      employer: 'Federal Inland Revenue Service (FIRS)',
-      serviceNumber: 'FIRS-SN-7729',
-      loanAmount: 2100000,
-      startDate: '02/10/2024',
-      endDate: '02/10/2025',
-      tenor: 12,
-      repaymentAmount: 198000,
-      totalRepayment: 2376000,
-      status: 'Active',
-      referenceNumber: 'REF-2024-0812',
-      description: 'Home Appliance Facility',
-      createdAt: '2024-02-01'
-    },
-    {
-      id: 'DED-1005',
-      uuid: 'DED-1005',
-      customer: 'Drew Carter',
-      employer: 'Nigerian Ports Authority (NPA)',
-      serviceNumber: 'NPA-SN-5519',
-      loanAmount: 1200000,
-      startDate: '04/01/2024',
-      endDate: '10/01/2024',
-      tenor: 6,
-      repaymentAmount: 220000,
-      totalRepayment: 1320000,
-      status: 'Active',
-      referenceNumber: 'REF-2024-1772',
-      description: 'Quick Salary Advance',
-      createdAt: '2024-03-25'
-    }
-  ]);
+  // Local Deductions Dataset
+  private mockDeductions: Deduction[] = [];
 
-  // Mock Cancellations Database
-  private cancellations = signal<Cancellation[]>([
-    {
-      id: 'CAN-801',
-      customer: 'Musa Ibrahim Dantata',
-      serviceNumber: 'SN-771920',
-      loanAmount: 950000,
-      tenor: 12,
-      repaymentAmount: 91000,
-      totalRepayment: 1092000,
-      cancelledAt: '02/18/2024',
-      cancellationReason: 'Early Full Liquidation by Customer',
-      cancelledBy: 'Jordan Vale',
-      originalDeductionId: 'DED-0912'
-    },
-    {
-      id: 'CAN-802',
-      customer: 'Folashade Evelyn Adebayo',
-      serviceNumber: 'FME-SN-9912',
-      loanAmount: 1400000,
-      tenor: 18,
-      repaymentAmount: 93000,
-      totalRepayment: 1674000,
-      cancelledAt: '03/05/2024',
-      cancellationReason: 'Employer Transfer & Service Restructuring',
-      cancelledBy: 'Avery Stone',
-      originalDeductionId: 'DED-0945'
-    },
-    {
-      id: 'CAN-803',
-      customer: 'Emmanuel Chukwuma Eze',
-      serviceNumber: 'NPF-SN-1102',
-      loanAmount: 600000,
-      tenor: 6,
-      repaymentAmount: 110000,
-      totalRepayment: 660000,
-      cancelledAt: '04/12/2024',
-      cancellationReason: 'Duplicate Mandate Cancellation',
-      cancelledBy: 'Jordan Vale',
-      originalDeductionId: 'DED-0978'
-    }
-  ]);
+  // Local Cancellations Dataset
+  private mockCancellations: Cancellation[] = [];
 
-  // Mock Users Database matching Image 2
-  private users = signal<PortalUser[]>([
-    {
-      id: 'demo-user-101',
-      name: 'Avery Stone',
-      branch: 'Demo Headquarters',
-      email: 'avery.stone@example.test',
-      phoneNumber: '08010001001',
-      role: 'Analyst',
-      status: 'Active',
-      createdAt: '2023-11-12'
-    },
-    {
-      id: 'demo-user-102',
-      name: 'Morgan Reed',
-      branch: 'Demo Headquarters',
-      email: 'morgan.reed@example.test',
-      phoneNumber: '08010001002',
-      role: 'Verification Officer',
-      status: 'Active',
-      createdAt: '2023-10-05'
-    },
-    {
-      id: 'demo-user-103',
-      name: 'Jordan Vale',
-      branch: 'Demo Headquarters',
-      email: 'jordan.vale@example.test',
-      phoneNumber: '08010001003',
-      role: 'Branch Manager',
-      status: 'Active',
-      createdAt: '2023-08-19'
-    },
-    {
-      id: 'demo-user-104',
-      name: 'Taylor Quinn',
-      branch: 'Demo Regional Branch',
-      email: 'taylor.quinn@example.test',
-      phoneNumber: '08010001004',
-      role: 'Auditor',
-      status: 'Active',
-      createdAt: '2024-01-14'
-    },
-    {
-      id: 'demo-user-105',
-      name: 'Casey Blake',
-      branch: 'Demo Support Branch',
-      email: 'casey.blake@example.test',
-      phoneNumber: '08010001005',
-      role: 'Super Admin',
-      status: 'Active',
-      createdAt: '2024-02-20'
-    }
-  ]);
+  private deductions = signal<Deduction[]>([]);
+  private cancellations = signal<Cancellation[]>([]);
+
+  // Local Users Database
+  private users = signal<PortalUser[]>([]);
 
   // Readonly signals
   readonly allDeductions = this.deductions.asReadonly();
   readonly allCancellations = this.cancellations.asReadonly();
   readonly allUsers = this.users.asReadonly();
 
-  // Computed metrics for Deductions screen
-  readonly totalDeductionsCount = computed(() => this.deductions().length);
+  // Computed metrics
   readonly totalLoanAmountSum = computed(() => 
     this.deductions().reduce((sum, d) => sum + (d.loanAmount || 0), 0)
   );
 
   // Get employee deductions
   getEmployeeDeductions(serviceNumber: string): Deduction[] {
-    return this.deductions().filter(d => d.serviceNumber.toLowerCase() === serviceNumber.toLowerCase());
+    return this.mockDeductions.filter(d => d.serviceNumber.toLowerCase() === serviceNumber.toLowerCase());
   }
 
   // Create Deduction
@@ -538,7 +560,6 @@ export class DeduktService {
     const today = new Date();
     const startDateFormatted = request.startDate || `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear()}`;
     
-    // Calculate End Date based on tenor
     const endDateObj = new Date(today);
     endDateObj.setMonth(endDateObj.getMonth() + Number(request.tenor));
     const endDateFormatted = `${(endDateObj.getMonth() + 1).toString().padStart(2, '0')}/${endDateObj.getDate().toString().padStart(2, '0')}/${endDateObj.getFullYear()}`;
@@ -561,10 +582,10 @@ export class DeduktService {
       createdAt: new Date().toISOString()
     };
 
-    // Update deductions
+    this.mockDeductions.unshift(newDeduction);
     this.deductions.update(list => [newDeduction, ...list]);
+    this.deductionsTotal.update(t => t + 1);
 
-    // Update employee available deductible balance
     this.employees.update(emps => emps.map(emp => {
       if (emp.serviceNumber === request.serviceNumber) {
         const remaining = Math.max(0, emp.availableDeductibleBalance - newDeduction.repaymentAmount);
@@ -579,19 +600,19 @@ export class DeduktService {
 
   // Cancel Deduction
   cancelDeduction(deductionId: string, reason: string): boolean {
-    const target = this.deductions().find(d => d.id === deductionId);
+    const target = this.mockDeductions.find(d => d.id === deductionId);
     if (!target) {
       this.toastService.error('Error', 'Deduction record not found.');
       return false;
     }
 
-    // Remove from active deductions list
+    this.mockDeductions = this.mockDeductions.filter(d => d.id !== deductionId);
     this.deductions.update(list => list.filter(d => d.id !== deductionId));
+    this.deductionsTotal.update(t => Math.max(0, t - 1));
 
     const today = new Date();
     const dateFormatted = `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear()}`;
 
-    // Add to cancellations list
     const cancellation: Cancellation = {
       id: `CAN-${Math.floor(800 + Math.random() * 900)}`,
       customer: target.customer,
@@ -606,9 +627,10 @@ export class DeduktService {
       originalDeductionId: target.id
     };
 
+    this.mockCancellations.unshift(cancellation);
     this.cancellations.update(list => [cancellation, ...list]);
+    this.cancellationsTotal.update(t => t + 1);
 
-    // Restore employee available deductible balance
     this.employees.update(emps => emps.map(emp => {
       if (emp.serviceNumber === target.serviceNumber) {
         return { ...emp, availableDeductibleBalance: emp.availableDeductibleBalance + target.repaymentAmount };

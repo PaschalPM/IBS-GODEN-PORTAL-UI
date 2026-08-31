@@ -2,17 +2,23 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { WalletComponent } from '../../../shared/components/wallet/wallet.component';
 
 @Component({
   selector: 'app-dedukt-layout',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, WalletComponent],
   template: `
     <div class="min-h-screen bg-[#F8FAFC] text-[#101828] flex flex-col font-sans">
       
       <!-- Topmost IBS Golden Partnership Ribbon -->
       <div class="bg-[#0E0E0F] text-[#D9D9D9] px-6 py-2 border-b border-[#1F242A] text-xs flex items-center justify-between">
         <div class="flex items-center space-x-2">
+          <img 
+            src="images/ibs-logo.jpg" 
+            alt="IBS Golden" 
+            class="w-5 h-5 rounded-md object-cover border border-[#E09900]/40"
+          />
           <span class="text-[#E09900] font-bold tracking-wider">IBS GOLDEN</span>
           <span class="text-[#6B6B6B]">|</span>
           <span class="text-[#D9D9D9]">Verification Portal Channel</span>
@@ -37,19 +43,14 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex items-center justify-between h-16">
             
-            <!-- Brand & Name -->
+            <!-- Brand & Name with Official Dedukt Logo -->
             <div class="flex items-center space-x-8">
               <a routerLink="/dedukt/search" class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-lg bg-[#081A4D] flex items-center justify-center text-white font-extrabold text-xl shadow-sm">
-                  <span class="text-[#008E97]">D</span>
-                </div>
-                <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="text-xl font-bold tracking-tight text-[#081A4D]">dedukt</span>
-                    <span class="w-1.5 h-1.5 rounded-full bg-[#008E97]"></span>
-                  </div>
-                  <p class="text-[10px] text-[#717680] font-medium">IBS Golden Partner Service</p>
-                </div>
+                <img 
+                  src="images/dedukt-logo.png" 
+                  alt="Dedukt" 
+                  class="h-8 object-contain"
+                />
               </a>
 
               <!-- Desktop Navigation Links -->
@@ -100,8 +101,11 @@ import { AuthService } from '../../../core/services/auth.service';
               </nav>
             </div>
 
-            <!-- Right Profile and Status -->
+            <!-- Right Wallet, Profile and Status -->
             <div class="flex items-center space-x-4">
+              <!-- Live Wallet Balance Component -->
+              <app-wallet mode="header"></app-wallet>
+
               <div class="flex items-center space-x-3 pl-3 border-l border-[#C4C9D7]">
                 <div class="w-8 h-8 rounded-full bg-[#00498B] text-white flex items-center justify-center font-bold text-xs">
                   {{ (authService.currentUser()?.name || 'User').substring(0, 2).toUpperCase() }}
@@ -167,4 +171,3 @@ import { AuthService } from '../../../core/services/auth.service';
 export class DeduktLayoutComponent {
   authService = inject(AuthService);
 }
-

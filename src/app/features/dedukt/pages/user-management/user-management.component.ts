@@ -124,7 +124,7 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
                       {{ user.createdAt | date:'mediumDate' }}
                     </td>
 
-                    <!-- Action Dropdown -->
+                    <!-- Action Dropdown (Reset Password removed) -->
                     <td class="dedukt-table-td">
                       <div class="relative w-44">
                         <select 
@@ -133,7 +133,6 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
                         >
                           <option value="" selected disabled>Select Action</option>
                           <option value="change-role">Change Role</option>
-                          <option value="reset-password">Reset Password</option>
                           <option value="delete">Delete</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#0BA5EC]">
@@ -161,26 +160,6 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
           </table>
         </div>
       </div>
-
-      <!-- Reset-password result banner -->
-      @if (resetPasswordResult()) {
-        <div class="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm">
-          <svg class="w-5 h-5 text-blue-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
-          </svg>
-          <div class="flex-1">
-            <p class="font-semibold text-blue-800">Password reset successfully</p>
-            <p class="text-blue-700 mt-0.5">
-              New password: <span class="font-mono font-bold tracking-widest bg-blue-100 px-2 py-0.5 rounded">{{ resetPasswordResult() }}</span>
-            </p>
-          </div>
-          <button (click)="resetPasswordResult.set(null)" class="text-blue-500 hover:text-blue-700 transition-colors">
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-      }
 
       <!-- Delete Confirmation Dialog -->
       @if (userToDelete()) {
@@ -261,7 +240,6 @@ export class UserManagementComponent implements OnInit {
   userToDelete = signal<PortalUser | null>(null);
   deletingId = signal<string | null>(null);
   generatedPassword = signal<string | null>(null);
-  resetPasswordResult = signal<string | null>(null);
 
   filteredUsers = computed(() => {
     const list = this.userService.users();
@@ -288,8 +266,6 @@ export class UserManagementComponent implements OnInit {
       this.userToChangeRole.set(user);
     } else if (action === 'delete') {
       this.userToDelete.set(user);
-    } else if (action === 'reset-password') {
-      this.handleResetPassword(user);
     }
   }
 
@@ -302,17 +278,8 @@ export class UserManagementComponent implements OnInit {
     this.userToDelete.set(null);
   }
 
-  async handleResetPassword(user: PortalUser) {
-    this.resetPasswordResult.set(null);
-    const newPwd = await this.userService.resetPassword(user.id);
-    if (newPwd) {
-      this.resetPasswordResult.set(newPwd);
-    }
-  }
-
   onUserCreated(newPassword: string) {
     this.showNewUserModal.set(false);
     this.generatedPassword.set(newPassword);
   }
 }
-

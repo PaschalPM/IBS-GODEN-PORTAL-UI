@@ -4,27 +4,31 @@ import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { DeduktService } from '../../../../core/services/dedukt.service';
 import { Cancellation } from '../../../../core/models/cancellation.model';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
+import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 
 @Component({
   selector: 'app-cancellations',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, CurrencyNairaPipe],
+  imports: [CommonModule, ReactiveFormsModule, CurrencyNairaPipe, PaginationComponent],
   template: `
     <div class="space-y-6">
       
-      <!-- Title matching Image 3 -->
-      <div>
+      <!-- Title -->
+      <div class="flex items-center justify-between">
         <h1 class="text-2xl font-extrabold text-[#081A4D] tracking-tight">Cancellations</h1>
+        <div class="text-xs text-[#717680] font-medium">
+          Total Cancellations: <span class="font-bold text-[#081A4D]">{{ deduktService.cancellationsTotal() }}</span>
+        </div>
       </div>
 
-      <!-- Filter Controls Bar matching Image 3 -->
+      <!-- Filter Controls Bar -->
       <div class="bg-white border border-[#C4C9D7] rounded-xl p-6 shadow-sm">
         <form [formGroup]="filterForm" (ngSubmit)="applyFilter()" class="flex flex-wrap lg:flex-nowrap items-end gap-4">
           
           <!-- Start Date -->
           <div class="w-full sm:w-52">
             <label class="block text-xs font-semibold text-[#101828] mb-1.5">
-              <span class="text-rose-500 font-bold">*</span> Start Date
+              Start Date
             </label>
             <input 
               type="date" 
@@ -36,7 +40,7 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
           <!-- End Date -->
           <div class="w-full sm:w-52">
             <label class="block text-xs font-semibold text-[#101828] mb-1.5">
-              <span class="text-rose-500 font-bold">*</span> End Date
+              End Date
             </label>
             <input 
               type="date" 
@@ -48,23 +52,31 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
           <!-- Search Text -->
           <div class="w-full sm:w-72">
             <label class="block text-xs font-semibold text-[#101828] mb-1.5">
-              <span class="text-rose-500 font-bold">*</span> Search Text
+              Search Text
             </label>
             <input 
               type="text" 
               formControlName="searchText" 
-              placeholder="Search customer name or ID..."
+              placeholder="Search customer, ID, or reason..."
               class="dedukt-input"
             />
           </div>
 
-          <!-- Search & Export Buttons matching Image 3 -->
+          <!-- Search & Export Buttons -->
           <div class="flex items-center gap-3 w-full sm:w-auto">
             <button 
               type="submit" 
               class="dedukt-btn-teal px-7 py-2.5 h-[42px] cursor-pointer"
             >
               Search
+            </button>
+
+            <button 
+              type="button" 
+              (click)="resetFilters()" 
+              class="dedukt-btn-outline px-4 py-2.5 h-[42px] text-xs cursor-pointer"
+            >
+              Reset
             </button>
 
             <button 
@@ -79,7 +91,7 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
         </form>
       </div>
 
-      <!-- Data Table matching Image 3 -->
+      <!-- Data Table -->
       <div class="bg-white border border-[#C4C9D7] rounded-xl shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
@@ -94,8 +106,20 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
               </tr>
             </thead>
             <tbody class="divide-y divide-[#F1F5F9]">
-              @if (filteredCancellations().length > 0) {
-                @for (item of filteredCancellations(); track item.id) {
+              <!-- Loading Skeleton -->
+              @if (deduktService.loadingCancellations()) {
+                @for (i of [1,2,3]; track i) {
+                  <tr class="animate-pulse">
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-36"></div></td>
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-28"></div></td>
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-20"></div></td>
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-12"></div></td>
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-20"></div></td>
+                    <td class="dedukt-table-td"><div class="h-3 bg-gray-200 rounded w-20"></div></td>
+                  </tr>
+                }
+              } @else if (deduktService.allCancellations().length > 0) {
+                @for (item of deduktService.allCancellations(); track item.id) {
                   <tr class="hover:bg-[#F8FAFC] transition-colors">
                     <td class="dedukt-table-td">
                       <div class="font-semibold text-[#101828]">{{ item.customer }}</div>
@@ -111,13 +135,22 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
               } @else {
                 <tr>
                   <td colspan="6" class="p-16 text-center text-[#717680] text-sm">
-                    No results
+                    No cancellations found.
                   </td>
                 </tr>
               }
             </tbody>
           </table>
         </div>
+
+        <!-- Reusable Server-Side Pagination -->
+        <app-pagination
+          [totalItems]="deduktService.cancellationsTotal()"
+          [pageSize]="pageSize()"
+          [currentPage]="currentPage()"
+          (pageChange)="onPageChange($event)"
+          (pageSizeChange)="onPageSizeChange($event)"
+        ></app-pagination>
       </div>
 
     </div>
@@ -127,49 +160,57 @@ export class CancellationsComponent implements OnInit {
   private fb = inject(FormBuilder);
   deduktService = inject(DeduktService);
 
+  currentPage = signal<number>(1);
+  pageSize = signal<number>(10);
+
   filterForm: FormGroup = this.fb.group({
     startDate: [''],
     endDate: [''],
     searchText: ['']
   });
 
-  filterParams = signal<{ startDate: string; endDate: string; searchText: string }>({
-    startDate: '',
-    endDate: '',
-    searchText: ''
-  });
-
   ngOnInit() {
-    this.deduktService.loadDeductions();
+    this.fetchCancellations();
   }
 
-  filteredCancellations = computed(() => {
-    const all = this.deduktService.allCancellations();
-    const params = this.filterParams();
-
-    return all.filter(c => {
-      const matchText = !params.searchText || 
-        c.customer.toLowerCase().includes(params.searchText.toLowerCase()) ||
-        c.serviceNumber.toLowerCase().includes(params.searchText.toLowerCase()) ||
-        c.cancellationReason.toLowerCase().includes(params.searchText.toLowerCase());
-
-      const matchStart = !params.startDate || new Date(c.cancelledAt) >= new Date(params.startDate);
-      const matchEnd = !params.endDate || new Date(c.cancelledAt) <= new Date(params.endDate);
-
-      return matchText && matchStart && matchEnd;
+  fetchCancellations() {
+    const formVals = this.filterForm.value;
+    this.deduktService.loadCancellations({
+      page: this.currentPage(),
+      per_page: this.pageSize(),
+      search_text: (formVals.searchText || '').trim(),
+      start_date: formVals.startDate || undefined,
+      end_date: formVals.endDate || undefined
     });
-  });
+  }
 
   applyFilter() {
-    this.filterParams.set({
-      startDate: this.filterForm.value.startDate || '',
-      endDate: this.filterForm.value.endDate || '',
-      searchText: (this.filterForm.value.searchText || '').trim()
+    this.currentPage.set(1);
+    this.fetchCancellations();
+  }
+
+  resetFilters() {
+    this.filterForm.reset({
+      startDate: '',
+      endDate: '',
+      searchText: ''
     });
+    this.currentPage.set(1);
+    this.fetchCancellations();
+  }
+
+  onPageChange(page: number) {
+    this.currentPage.set(page);
+    this.fetchCancellations();
+  }
+
+  onPageSizeChange(size: number) {
+    this.pageSize.set(size);
+    this.currentPage.set(1);
+    this.fetchCancellations();
   }
 
   exportData() {
-    this.deduktService.exportToCsv('Dedukt_Cancellations', this.filteredCancellations());
+    this.deduktService.exportToCsv('Dedukt_Cancellations', this.deduktService.allCancellations());
   }
 }
-
