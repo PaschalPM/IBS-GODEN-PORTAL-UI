@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { firstValueFrom, catchError, of } from 'rxjs';
+import { firstValueFrom, catchError, of, throwError } from 'rxjs';
 import { AuthUser, LoginCredentials, LoginResponse, MeResponse } from '../models/auth.model';
 import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
@@ -34,36 +34,58 @@ export class AuthService {
   }
 
   /**
+   * Decode JWT and extract user information from the token payload
+   */
+  private decodeToken(token: string): any {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Invalid token format');
+      }
+      const decoded = JSON.parse(atob(parts[1]));
+      return decoded;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /**
    * Called on app init (via APP_INITIALIZER).
-   * Validates the stored token against GET /auth/me and refreshes the user signal.
-   * Silently clears state if the token is missing or rejected (401).
+   * Decodes the stored JWT token and restores the user session.
+   * Silently clears state if the token is missing or invalid.
    */
   async fetchCurrentUser(): Promise<void> {
     const token = this.getToken();
     if (!token) return;
 
     try {
-      const me = await firstValueFrom(
-        this.http.get<MeResponse>(`${environment.apiUrl}/auth/me`).pipe(
-          catchError(() => of(null))
-        )
-      );
-
-      if (!me) {
-        // Token rejected — clear everything
+      // Decode JWT to extract user information
+      const decoded = this.decodeToken(token);
+      
+      if (!decoded || !decoded.sub || !decoded.email) {
+        // Invalid token — clear everything
         this.currentUserSignal.set(null);
         localStorage.removeItem('ibs_auth_token');
         localStorage.removeItem('ibs_auth_user');
         return;
       }
 
+      // Extract role name if role is an object
+      let roleName = 'Branch Manager';
+      if (typeof decoded.role === 'string') {
+        roleName = decoded.role as AuthUser['role'];
+      } else if (typeof decoded.role === 'object' && decoded.role?.name) {
+        roleName = decoded.role.name as AuthUser['role'];
+      }
+
+      // Map decoded JWT → AuthUser
       const user: AuthUser = {
-        id: me.id,
-        name: me.fullName ?? me.name ?? me.email.split('@')[0],
-        email: me.email,
-        role: (me.role as AuthUser['role']) ?? 'Branch Manager',
-        branch: me.branch ?? 'Main Branch',
-        avatarUrl: me.avatarUrl ?? ''
+        id: decoded.sub,
+        name: decoded.name ?? decoded.email.split('@')[0],
+        email: decoded.email,
+        role: roleName as AuthUser['role'],
+        branch: 'Main Branch',
+        avatarUrl: ''
       };
 
       // Always keep localStorage in sync
@@ -71,7 +93,10 @@ export class AuthService {
       this.currentUserSignal.set(user);
 
     } catch {
-      // Network failure — keep current local state, don't force logout
+      // Token decode failure — clear everything
+      this.currentUserSignal.set(null);
+      localStorage.removeItem('ibs_auth_token');
+      localStorage.removeItem('ibs_auth_user');
     }
   }
 
@@ -86,21 +111,46 @@ export class AuthService {
         this.http.post<LoginResponse>(`${environment.apiUrl}/auth/login`, {
           email: credentials.email,
           password: credentials.password
-        })
+        }).pipe(
+          catchError((err: HttpErrorResponse) => {
+            return throwError(() => err);
+          })
+        )
       );
 
-      // Map API user → AuthUser
-      const user: AuthUser = {
-        id: response.user.id,
-        name: response.user.fullName ?? response.user.name ?? credentials.email.split('@')[0],
-        email: response.user.email,
-        role: (response.user.role as AuthUser['role']) ?? 'Branch Manager',
-        branch: response.user.branch ?? 'Main Branch',
-        avatarUrl: response.user.avatarUrl ?? ''
-      };
+      // Validate response structure
+      if (!response || !response.access_token) {
+        throw new Error('INVALID_LOGIN_RESPONSE');
+      }
 
-      // Persist token
-      localStorage.setItem('ibs_auth_token', response.token);
+      // Store token
+      localStorage.setItem('ibs_auth_token', response.access_token);
+
+      // Decode JWT to extract user information
+      const decoded = this.decodeToken(response.access_token);
+      
+      if (!decoded || !decoded.sub || !decoded.email) {
+        localStorage.removeItem('ibs_auth_token');
+        throw new Error('INVALID_TOKEN_DATA');
+      }
+
+      // Extract role name if role is an object
+      let roleName = 'Branch Manager';
+      if (typeof decoded.role === 'string') {
+        roleName = decoded.role as AuthUser['role'];
+      } else if (typeof decoded.role === 'object' && decoded.role?.name) {
+        roleName = decoded.role.name as AuthUser['role'];
+      }
+
+      // Map decoded JWT → AuthUser
+      const user: AuthUser = {
+        id: decoded.sub,
+        name: decoded.name ?? decoded.email.split('@')[0],
+        email: decoded.email,
+        role: roleName as AuthUser['role'],
+        branch: 'Main Branch',
+        avatarUrl: ''
+      };
 
       // Persist user if rememberMe
       if (credentials.rememberMe) {
@@ -113,10 +163,35 @@ export class AuthService {
 
     } catch (err) {
       const httpErr = err as HttpErrorResponse;
-      const message =
-        httpErr?.error?.message ??
-        httpErr?.message ??
-        'An unexpected error occurred. Please try again.';
+      let message = 'An unexpected error occurred. Please try again.';
+      
+      // Handle custom error messages
+      if (err instanceof Error) {
+        if (err.message === 'INVALID_LOGIN_RESPONSE') {
+          message = 'Invalid server response: missing access token';
+        } else if (err.message === 'INVALID_TOKEN_DATA') {
+          message = 'Invalid token data returned from server';
+        } else if (err.message === 'Missing credentials') {
+          // Already showed toast, re-throw without showing again
+          throw err;
+        } else {
+          message = err.message;
+        }
+      } else if (httpErr?.error) {
+        // Handle HTTP error responses (401, 500, etc.)
+        if (httpErr.error.message) {
+          const errorMsg = httpErr.error.message;
+          if (typeof errorMsg === 'string') {
+            message = errorMsg;
+          } else if (typeof errorMsg === 'object') {
+            // Extract from nested message object
+            message = errorMsg.message ?? errorMsg.error ?? JSON.stringify(errorMsg);
+          }
+        } else if (httpErr.error.status === 'error' && httpErr.error.message) {
+          message = httpErr.error.message;
+        }
+      }
+      
       this.toastService.error('Login Failed', message);
       throw err;
     }

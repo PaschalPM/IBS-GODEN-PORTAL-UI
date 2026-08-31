@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -87,17 +87,6 @@ import { WalletComponent } from '../../../shared/components/wallet/wallet.compon
                   </svg>
                   Cancellations
                 </a>
-
-                <a 
-                  routerLink="/dedukt/users" 
-                  routerLinkActive="bg-[#E6F4F5] text-[#00498B] font-semibold border-b-2 border-[#008E97]" 
-                  class="px-3.5 py-2 rounded-md text-sm text-[#475467] hover:text-[#00498B] hover:bg-[#F0F9FF] transition-all flex items-center gap-2"
-                >
-                  <svg class="w-4 h-4 text-[#717680]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                  </svg>
-                  Users Management
-                </a>
               </nav>
             </div>
 
@@ -143,13 +132,6 @@ import { WalletComponent } from '../../../shared/components/wallet/wallet.compon
           >
             Cancellations
           </a>
-          <a 
-            routerLink="/dedukt/users" 
-            routerLinkActive="bg-[#008E97] text-white font-medium" 
-            class="px-3 py-1.5 rounded text-xs text-[#354778] whitespace-nowrap"
-          >
-            Users Management
-          </a>
         </div>
       </header>
 
@@ -165,9 +147,76 @@ import { WalletComponent } from '../../../shared/components/wallet/wallet.compon
           <span class="text-[#00498B] font-medium">Configured for IBS Golden Portal</span>
         </div>
       </footer>
+
+      <!-- Logout Confirmation Modal -->
+      @if (showLogoutModal()) {
+        <!-- Backdrop -->
+        <div 
+          class="fixed inset-0 bg-black/50 z-40" 
+          (click)="showLogoutModal.set(false)"
+        ></div>
+
+        <!-- Modal -->
+        <div class="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full border border-[#C4C9D7] animate-in fade-in zoom-in-95 duration-200">
+            
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-rose-50 to-red-50 px-6 py-4 border-b border-[#E4E7EC] rounded-t-2xl">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="text-lg font-bold text-[#081A4D]">Confirm Logout</h2>
+                  <p class="text-xs text-[#717680] mt-0.5">You are about to sign out</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="px-6 py-5">
+              <p class="text-sm text-[#475467] leading-relaxed">
+                Are you sure you want to sign out of <strong>IBS Golden Portal</strong>?
+              </p>
+              <p class="text-xs text-[#717680] mt-2.5">
+                You will need to log in again with your credentials to access your account.
+              </p>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-[#F8FAFC] px-6 py-4 border-t border-[#E4E7EC] rounded-b-2xl flex items-center gap-3">
+              <button
+                type="button"
+                (click)="showLogoutModal.set(false)"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold text-[#475467] bg-white border border-[#C4C9D7] hover:bg-[#F8FAFC] rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                (click)="confirmLogout()"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `
 })
 export class DeduktLayoutComponent {
   authService = inject(AuthService);
+  showLogoutModal = signal(false);
+
+  confirmLogout() {
+    this.showLogoutModal.set(false);
+    this.authService.logout();
+  }
 }

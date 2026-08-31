@@ -16,7 +16,7 @@ export interface CreateUserDto {
   firstName: string;
   lastName: string;
   email: string;
-  role: string;        // API role name e.g. 'admin' | 'staff'
+  roleId: number;
 }
 
 // ── API shapes ────────────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import {
   ChangeRoleRequest
 } from '../models/user.model';
 import { ToastService } from './toast.service';
+import { AuthService } from './auth.service';
 import { environment } from '../../../environments/environment';
 
 /** Maps an API user object to the flat PortalUser shape used by the UI. */
@@ -43,7 +44,8 @@ export class UserService {
 
   constructor(
     private http: HttpClient,
-    private toast: ToastService
+    private toast: ToastService,
+    private authService: AuthService
   ) {}
 
   // ── GET /roles ──────────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ export class UserService {
         first_name: dto.firstName,
         last_name: dto.lastName,
         email: dto.email,
-        role: dto.role
+        role_id: dto.roleId
       };
       const res = await firstValueFrom(
         this.http.post<CreateUserResponse>(this.base, payload)
@@ -118,13 +120,14 @@ export class UserService {
     }
   }
 
-  // ── POST /users/change-password ─────────────────────────────────────────────
+  // ── PATCH /users/change-password ────────────────────────────────────────────
   async changePassword(payload: ChangePasswordRequest): Promise<boolean> {
     try {
       await firstValueFrom(
-        this.http.post(`${this.base}/change-password`, payload)
+        this.http.patch(`${this.base}/change-password`, payload)
       );
-      this.toast.success('Password Changed', 'Your password has been updated.');
+      this.toast.success('Password Changed', 'Your password has been updated. Please sign in again.');
+      this.authService.logout();
       return true;
     } catch (err) {
       const msg = this.extractMessage(err, 'Failed to change password.');
@@ -133,11 +136,11 @@ export class UserService {
     }
   }
 
-  // ── POST /users/:uuid/reset-password ────────────────────────────────────────
+  // ── PATCH /users/:uuid/reset-password ───────────────────────────────────────
   async resetPassword(uuid: string): Promise<string | null> {
     try {
       const res = await firstValueFrom(
-        this.http.post<ResetPasswordResponse>(`${this.base}/${uuid}/reset-password`, {})
+        this.http.patch<ResetPasswordResponse>(`${this.base}/${uuid}/reset-password`, {})
       );
       this.toast.success('Password Reset', res.message ?? 'Password reset successfully.');
       return res.data.new_password;

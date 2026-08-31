@@ -1,12 +1,13 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { ChangePasswordModalComponent } from '../dedukt/components/change-password-modal/change-password-modal.component';
 
 @Component({
   selector: 'app-services-hub',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, ChangePasswordModalComponent],
   template: `
     <div class="min-h-screen bg-[#0E0E0F] text-[#F9F8F7] flex flex-col font-sans">
       <!-- IBS Golden Portal Navigation Header -->
@@ -43,8 +44,18 @@ import { AuthService } from '../../core/services/auth.service';
               </div>
             </div>
 
-            <button 
-              (click)="authService.logout()"
+            <button
+              (click)="showChangePasswordModal.set(true)"
+              class="flex items-center space-x-1.5 text-xs text-[#D9D9D9] hover:text-[#E09900] bg-[#1F242A] hover:bg-[#2A313A] px-3.5 py-2 rounded-lg border border-[#2E353E] transition-all cursor-pointer"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+              <span>Change Password</span>
+            </button>
+
+            <button
+              (click)="showLogoutModal.set(true)"
               class="flex items-center space-x-1.5 text-xs text-[#D9D9D9] hover:text-[#E09900] bg-[#1F242A] hover:bg-[#2A313A] px-3.5 py-2 rounded-lg border border-[#2E353E] transition-all cursor-pointer"
             >
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -133,9 +144,6 @@ import { AuthService } from '../../core/services/auth.service';
                 <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
                   <span class="text-[#008E97]">✓</span> Cancellations Desk
                 </div>
-                <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
-                  <span class="text-[#008E97]">✓</span> User Management
-                </div>
               </div>
             </div>
 
@@ -211,6 +219,121 @@ import { AuthService } from '../../core/services/auth.service';
             </div>
           </div>
 
+          <!-- ADMIN ONLY: USERS MANAGEMENT -->
+          @if (authService.currentUser()?.role === 'admin') {
+            <div class="group relative bg-[#1F242A] hover:bg-[#252B33] border-2 border-[#E09900] rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 shadow-xl hover:shadow-[#E09900]/20 flex flex-col justify-between">
+              
+              <!-- Top Status Ribbon -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                  <div class="w-12 h-12 rounded-xl bg-[#E09900]/20 border border-[#E09900]/40 flex items-center justify-center text-[#E09900] font-bold text-lg">
+                    👥
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-bold text-white group-hover:text-[#FDB022] transition-colors">Portal Users</h3>
+                    <p class="text-[11px] text-[#E09900] font-medium">System Administration</p>
+                  </div>
+                </div>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E09900]/15 text-[#E09900] border border-[#E09900]/30 text-xs font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#E09900]"></span>
+                  Admin
+                </span>
+              </div>
+
+              <!-- Service Details -->
+              <div class="my-3">
+                <p class="text-xs text-[#D9D9D9] leading-relaxed">
+                  Create new portal users, manage user roles and permissions, reset passwords, and administer portal access across the IBS Golden system.
+                </p>
+
+                <!-- Modules Included -->
+                <div class="mt-4 grid grid-cols-2 gap-2 text-[11px] text-[#D9D9D9]">
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
+                    <span class="text-[#E09900]">✓</span> User Listings
+                  </div>
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
+                    <span class="text-[#E09900]">✓</span> Create Users
+                  </div>
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
+                    <span class="text-[#E09900]">✓</span> Change Roles
+                  </div>
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
+                    <span class="text-[#E09900]">✓</span> Password Reset
+                  </div>
+                </div>
+              </div>
+
+              <!-- CTA Button -->
+              <div class="mt-6 pt-4 border-t border-[#2E353E]">
+                <button 
+                  (click)="navigateToUsers()" 
+                  class="w-full py-3 px-4 bg-[#E09900] hover:bg-[#FDB022] text-[#0E0E0F] font-bold rounded-xl transition-all shadow-lg shadow-[#E09900]/30 flex items-center justify-center space-x-2 text-sm cursor-pointer"
+                >
+                  <span>Manage Portal Users</span>
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- ADMIN ONLY: GENERAL MANAGEMENT -->
+          @if (authService.currentUser()?.role === 'admin') {
+            <div class="group relative bg-[#1F242A] hover:bg-[#252B33] border-2 border-[#7C5CFC] rounded-2xl p-6 transition-all duration-300 transform hover:-translate-y-1 shadow-xl hover:shadow-[#7C5CFC]/20 flex flex-col justify-between">
+
+              <!-- Top Status Ribbon -->
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                  <div class="w-12 h-12 rounded-xl bg-[#7C5CFC]/20 border border-[#7C5CFC]/40 flex items-center justify-center text-[#7C5CFC] font-bold text-lg">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="text-lg font-bold text-white group-hover:text-[#8F73FD] transition-colors">General Management</h3>
+                    <p class="text-[11px] text-[#7C5CFC] font-medium">System Administration</p>
+                  </div>
+                </div>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#7C5CFC]/15 text-[#7C5CFC] border border-[#7C5CFC]/30 text-xs font-semibold">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#7C5CFC]"></span>
+                  Admin
+                </span>
+              </div>
+
+              <!-- Service Details -->
+              <div class="my-3">
+                <p class="text-xs text-[#D9D9D9] leading-relaxed">
+                  Configure system-wide settings applied across deduction mandates, starting with the monthly interest rate.
+                </p>
+
+                <!-- Modules Included -->
+                <div class="mt-4 grid grid-cols-2 gap-2 text-[11px] text-[#D9D9D9]">
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E]">
+                    <span class="text-[#7C5CFC]">✓</span> Interest Rate
+                  </div>
+                  <div class="flex items-center gap-1.5 bg-[#0E0E0F] p-2 rounded border border-[#2E353E] opacity-50">
+                    <span class="text-[#7C5CFC]">•</span> More Coming Soon
+                  </div>
+                </div>
+              </div>
+
+              <!-- CTA Button -->
+              <div class="mt-6 pt-4 border-t border-[#2E353E]">
+                <button
+                  (click)="navigateToSettings()"
+                  class="w-full py-3 px-4 bg-[#7C5CFC] hover:bg-[#8F73FD] text-[#0E0E0F] font-bold rounded-xl transition-all shadow-lg shadow-[#7C5CFC]/30 flex items-center justify-center space-x-2 text-sm cursor-pointer"
+                >
+                  <span>Manage Settings</span>
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          }
+
         </div>
       </main>
 
@@ -218,14 +341,98 @@ import { AuthService } from '../../core/services/auth.service';
       <footer class="border-t border-[#1F242A] py-5 px-6 text-center text-xs text-[#6B6B6B] bg-[#0E0E0F]">
         <p>IBS Golden Verification Portal &bull; Institutional Client Gateway &bull; Powered by Dedukt Integration</p>
       </footer>
+
+      <!-- Logout Confirmation Modal -->
+      @if (showLogoutModal()) {
+        <!-- Backdrop -->
+        <div 
+          class="fixed inset-0 bg-black/50 z-40" 
+          (click)="showLogoutModal.set(false)"
+        ></div>
+
+        <!-- Modal -->
+        <div class="fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div class="bg-[#0E0E0F] rounded-2xl shadow-2xl max-w-sm w-full border border-[#2E353E] animate-in fade-in zoom-in-95 duration-200">
+            
+            <!-- Modal Header -->
+            <div class="bg-gradient-to-r from-rose-950 to-red-950 px-6 py-4 border-b border-[#2E353E] rounded-t-2xl">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-rose-900 text-rose-400 flex items-center justify-center">
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="text-lg font-bold text-[#F9F8F7]">Confirm Logout</h2>
+                  <p class="text-xs text-[#D9D9D9] mt-0.5">You are about to sign out</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="px-6 py-5">
+              <p class="text-sm text-[#D9D9D9] leading-relaxed">
+                Are you sure you want to sign out of <strong>IBS Golden Portal</strong>?
+              </p>
+              <p class="text-xs text-[#6B6B6B] mt-2.5">
+                You will need to log in again with your credentials to access your account.
+              </p>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="bg-[#1F242A] px-6 py-4 border-t border-[#2E353E] rounded-b-2xl flex items-center gap-3">
+              <button
+                type="button"
+                (click)="showLogoutModal.set(false)"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold text-[#D9D9D9] bg-[#0E0E0F] border border-[#2E353E] hover:bg-[#252B33] rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                (click)="confirmLogout()"
+                class="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                </svg>
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Change Password Modal -->
+      @if (showChangePasswordModal()) {
+        <app-change-password-modal
+          (close)="showChangePasswordModal.set(false)"
+          (updated)="showChangePasswordModal.set(false)"
+        ></app-change-password-modal>
+      }
     </div>
   `
 })
 export class ServicesHubComponent {
   authService = inject(AuthService);
   private router = inject(Router);
+  showLogoutModal = signal(false);
+  showChangePasswordModal = signal(false);
 
   launchDedukt() {
     this.router.navigate(['/dedukt/search']);
+  }
+
+  navigateToUsers() {
+    this.router.navigate(['/users']);
+  }
+
+  navigateToSettings() {
+    this.router.navigate(['/settings']);
+  }
+
+  confirmLogout() {
+    this.showLogoutModal.set(false);
+    this.authService.logout();
   }
 }

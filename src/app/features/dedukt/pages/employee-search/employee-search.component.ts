@@ -434,6 +434,8 @@ export class EmployeeSearchComponent implements OnInit {
 
     if (result) {
       this.refreshEmployeeDeductions(result.serviceNumber);
+      // Refresh wallet balance after successful employee search
+      await this.deduktService.loadWalletBalance();
       this.toastService.success('Employee Verified', `Found records for ${result.fullName} (${result.serviceNumber}).`);
     } else {
       this.employeeDeductions.set([]);
