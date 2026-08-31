@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Employee } from '../../../../core/models/employee.model';
 import { DeduktService } from '../../../../core/services/dedukt.service';
+import { SettingsService } from '../../../../core/services/settings.service';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
 
 @Component({
@@ -67,16 +68,16 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
             <!-- Tenor (Number of repayments) -->
             <div>
               <label class="block text-xs font-semibold text-[#354778] mb-1">
-                Repayments (Tenor) <span class="text-rose-500">*</span>
+                Repayments (Tenor, Months) <span class="text-rose-500">*</span>
               </label>
-              <select formControlName="number_of_repayments" (change)="calculateRepayment()" class="dedukt-input">
-                <option [value]="3">3 Months</option>
-                <option [value]="5">5 Months</option>
-                <option [value]="6">6 Months</option>
-                <option [value]="12">12 Months</option>
-                <option [value]="18">18 Months</option>
-                <option [value]="24">24 Months</option>
-              </select>
+              <input
+                type="number"
+                formControlName="number_of_repayments"
+                (input)="calculateRepayment()"
+                min="1"
+                placeholder="e.g. 12"
+                class="dedukt-input"
+              />
             </div>
 
             <!-- Monthly Repayment Amount -->
@@ -224,6 +225,7 @@ export class CreateDeductionModalComponent implements OnInit {
 
   private fb = inject(FormBuilder);
   private deduktService = inject(DeduktService);
+  private settingsService = inject(SettingsService);
 
   form!: FormGroup;
   isSubmitting = signal(false);
@@ -232,7 +234,7 @@ export class CreateDeductionModalComponent implements OnInit {
     const today = new Date().toISOString().split('T')[0];
     this.form = this.fb.group({
       loan_amount: ['', [Validators.required, Validators.min(1000)]],
-      number_of_repayments: [12, [Validators.required]],
+      number_of_repayments: [12, [Validators.required, Validators.min(1)]],
       repayment_amount: ['', [Validators.required, Validators.min(100)]],
       loan_released_date: [today, [Validators.required]],
       bvn: [this.employee?.bvn || '', [Validators.required]],
@@ -248,8 +250,8 @@ export class CreateDeductionModalComponent implements OnInit {
     const loan = Number(this.form.get('loan_amount')?.value || 0);
     const tenor = Number(this.form.get('number_of_repayments')?.value || 5);
     if (loan > 0 && tenor > 0) {
-      const annualRate = 0.12;
-      const totalInterest = loan * (annualRate * (tenor / 12));
+      const monthlyRate = this.settingsService.monthlyInterestRate() / 100;
+      const totalInterest = loan * monthlyRate * tenor;
       const total = Math.round(loan + totalInterest);
       const monthly = Math.round(total / tenor);
 
