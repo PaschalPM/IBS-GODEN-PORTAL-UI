@@ -4,7 +4,7 @@ import { Deduction } from '../../../../core/models/deduction.model';
 import { DeduktService } from '../../../../core/services/dedukt.service';
 
 @Component({
-  selector: 'app-cancel-deduction-modal',
+  selector: 'app-delete-deduction-modal',
   standalone: true,
   imports: [CommonModule],
   template: `
@@ -12,15 +12,15 @@ import { DeduktService } from '../../../../core/services/dedukt.service';
       <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#C4C9D7] transform transition-all animate-in fade-in zoom-in-95 duration-200">
         
         <div class="flex items-start gap-4">
-          <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+          <div class="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
             </svg>
           </div>
           <div class="flex-1">
-            <h3 class="text-base font-bold text-[#081A4D]">Stop Mandate</h3>
+            <h3 class="text-base font-bold text-[#081A4D]">Delete Mandate</h3>
             <p class="text-sm text-[#475467] mt-1.5 leading-relaxed">
-              Are you sure you want to stop this mandate?
+              Are you sure you want to delete this mandate?
             </p>
           </div>
           <button (click)="close.emit()" class="text-[#717680] hover:text-[#101828] p-1 rounded-lg transition-colors">
@@ -39,21 +39,21 @@ import { DeduktService } from '../../../../core/services/dedukt.service';
           >
             Cancel
           </button>
-          
-          <button
+
+          <button 
             type="button"
-            (click)="confirmStoppage()"
-            [disabled]="isSubmitting()"
-            class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-sm"
+            (click)="confirmDelete()" 
+            [disabled]="isDeleting()"
+            class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-xs transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2 shadow-sm"
           >
-            @if (isSubmitting()) {
+            @if (isDeleting()) {
               <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
               </svg>
-              <span>Stopping...</span>
+              <span>Deleting...</span>
             } @else {
-              <span>Confirm Stop</span>
+              <span>Confirm Delete</span>
             }
           </button>
         </div>
@@ -62,22 +62,25 @@ import { DeduktService } from '../../../../core/services/dedukt.service';
     </div>
   `
 })
-export class CancelDeductionModalComponent {
+export class DeleteDeductionModalComponent {
   @Input({ required: true }) deduction!: Deduction;
   @Output() close = new EventEmitter<void>();
-  @Output() cancelled = new EventEmitter<void>();
+  @Output() deleted = new EventEmitter<void>();
 
   private deduktService = inject(DeduktService);
-  isSubmitting = signal(false);
+  isDeleting = signal(false);
 
-  async confirmStoppage() {
-    if (!this.deduction || this.isSubmitting()) return;
-    this.isSubmitting.set(true);
-    const uuid = this.deduction.uuid || this.deduction.id;
-    const ok = await this.deduktService.stopDeduction(uuid, 'Officer confirmed stoppage request');
-    this.isSubmitting.set(false);
+  async confirmDelete() {
+    if (!this.deduction || this.isDeleting()) return;
+
+    this.isDeleting.set(true);
+    const targetUuid = this.deduction.uuid || this.deduction.id;
+    const ok = await this.deduktService.deleteDeduction(targetUuid);
+    this.isDeleting.set(false);
+
     if (ok) {
-      this.cancelled.emit();
+      this.deleted.emit();
     }
   }
 }
+

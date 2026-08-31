@@ -24,8 +24,8 @@ function mapApiUser(u: ApiUser): PortalUser {
     name: `${u.first_name} ${u.last_name}`.trim(),
     email: u.email,
     role: u.role.name as PortalUser['role'],
-    branch: 'Main Branch',        // API doesn't return branch yet
-    phoneNumber: '',              // API doesn't return phone yet
+    branch: 'Main Branch',
+    phoneNumber: '',
     status: 'Active',
     createdAt: u.createdAt
   };
@@ -54,10 +54,11 @@ export class UserService {
       const res = await firstValueFrom(
         this.http.get<RolesListResponse>(this.rolesUrl)
       );
-      this.roles.set(res.data || []);
+      this.roles.set(res?.data || []);
     } catch (err) {
       const msg = this.extractMessage(err, 'Failed to load roles.');
       console.warn('Roles load warning:', msg);
+      this.roles.set([]);
     }
   }
 
@@ -68,10 +69,15 @@ export class UserService {
       const res = await firstValueFrom(
         this.http.get<UsersListResponse>(this.base)
       );
-      this.users.set(res.data.map(mapApiUser));
+      if (res?.data && Array.isArray(res.data)) {
+        this.users.set(res.data.map(mapApiUser));
+      } else {
+        this.users.set([]);
+      }
     } catch (err) {
       const msg = this.extractMessage(err, 'Failed to load users.');
-      this.toast.error('Users Error', msg);
+      console.warn('Users load warning:', msg);
+      this.users.set([]);
     } finally {
       this.loading.set(false);
     }
@@ -91,13 +97,12 @@ export class UserService {
         this.http.post<CreateUserResponse>(this.base, payload)
       );
       const mapped = mapApiUser(res.data.user);
-      // Prepend to local store so the table updates instantly
       this.users.update(list => [mapped, ...list]);
       this.toast.success('User Created', res.message ?? 'User created successfully.');
       return { user: mapped, newPassword: res.data.new_password };
     } catch (err) {
       const msg = this.extractMessage(err, 'Failed to create user.');
-      this.toast.error('Create User Failed', msg);
+      this.toast.error('User Creation Failed', msg);
       return null;
     } finally {
       this.loading.set(false);
@@ -115,7 +120,7 @@ export class UserService {
       return true;
     } catch (err) {
       const msg = this.extractMessage(err, 'Failed to delete user.');
-      this.toast.error('Delete Failed', msg);
+      this.toast.error('Delete User Failed', msg);
       return false;
     }
   }
@@ -173,7 +178,6 @@ export class UserService {
         }
       }
 
-      // Update local state in users signal
       this.users.update(list =>
         list.map(u => u.id === uuid ? { ...u, role: roleName as any } : u)
       );

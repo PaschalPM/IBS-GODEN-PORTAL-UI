@@ -87,7 +87,7 @@ export interface Deduction {
   totalRepayment: number;
   status: string;
   remarks?: string | null;
-  digisign?: ApiDeductionDigisign;
+  digisign?: ApiDeductionDigisign | boolean;
   referenceNumber: string;
   description?: string;
   createdAt: string;

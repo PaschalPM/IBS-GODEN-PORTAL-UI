@@ -49,7 +49,7 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
             <input 
               type="text" 
               formControlName="searchText" 
-              placeholder="e.g. 01ED124420040389"
+              placeholder="Enter service number or reference"
               class="dedukt-input"
             />
           </div>
@@ -174,15 +174,11 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
                     <!-- Status Badge -->
                     <td class="dedukt-table-td">
                       <span 
-                        class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase"
-                        [ngClass]="{
-                          'bg-amber-100 text-amber-800 border border-amber-300': item.status === 'PENDING',
-                          'bg-emerald-100 text-emerald-800 border border-emerald-300': item.status === 'NEW' || item.status === 'Active' || item.status === 'ACTIVE',
-                          'bg-rose-100 text-rose-800 border border-rose-300': item.status === 'CANCELLED',
-                          'bg-blue-100 text-blue-800 border border-blue-300': item.status === 'COMPLETED'
-                        }"
+                        class="text-[10px] px-2.5 py-1 rounded-full font-bold uppercase inline-flex items-center gap-1.5 border shadow-sm"
+                        [ngClass]="getDeductionStatusBadgeClass(item.status)"
                       >
-                        {{ item.status }}
+                        <span class="w-1.5 h-1.5 rounded-full" [ngClass]="getDeductionStatusDotClass(item.status)"></span>
+                        <span>{{ item.status }}</span>
                       </span>
                       @if (item.remarks) {
                         <p class="text-[10px] text-[#717680] mt-0.5 max-w-xs truncate" [title]="item.remarks">{{ item.remarks }}</p>
@@ -271,5 +267,35 @@ export class DeductionsComponent implements OnInit {
 
   exportData() {
     this.deduktService.exportToCsv('Deductions_Mandates', this.deduktService.allDeductions());
+  }
+
+  getDeductionStatusBadgeClass(status: string): string {
+    const s = (status || '').toUpperCase().trim();
+    if (['CANCELLED', 'STOPPED', 'REJECTED', 'FAILED'].includes(s)) {
+      return 'bg-rose-50 text-rose-700 border-rose-300';
+    }
+    if (['NEW'].includes(s)) {
+      return 'bg-sky-50 text-sky-700 border-sky-300';
+    }
+    if (['PENDING', 'PENDING_VERIFICATION', 'PENDING_APPROVAL', 'PROCESSING'].includes(s)) {
+      return 'bg-amber-50 text-amber-800 border-amber-300';
+    }
+    if (['ACTIVE', 'APPROVED', 'RUNNING'].includes(s)) {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-300';
+    }
+    if (['COMPLETED', 'SETTLED', 'LIQUIDATED', 'PAID'].includes(s)) {
+      return 'bg-indigo-50 text-indigo-700 border-indigo-300';
+    }
+    return 'bg-slate-50 text-slate-700 border-slate-300';
+  }
+
+  getDeductionStatusDotClass(status: string): string {
+    const s = (status || '').toUpperCase().trim();
+    if (['CANCELLED', 'STOPPED', 'REJECTED', 'FAILED'].includes(s)) return 'bg-rose-500';
+    if (['NEW'].includes(s)) return 'bg-sky-500';
+    if (['PENDING', 'PENDING_VERIFICATION', 'PENDING_APPROVAL', 'PROCESSING'].includes(s)) return 'bg-amber-500';
+    if (['ACTIVE', 'APPROVED', 'RUNNING'].includes(s)) return 'bg-emerald-500';
+    if (['COMPLETED', 'SETTLED', 'LIQUIDATED', 'PAID'].includes(s)) return 'bg-indigo-500';
+    return 'bg-slate-400';
   }
 }

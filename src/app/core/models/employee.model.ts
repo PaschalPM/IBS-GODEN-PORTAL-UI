@@ -15,6 +15,7 @@ export interface Employee {
   gradeLevel: string;
   ministryOrAgency: string;
   bvn: string;
+  nin?: string;
   phone: string;
   email: string;
   status: 'Active' | 'Suspended' | 'Retired';

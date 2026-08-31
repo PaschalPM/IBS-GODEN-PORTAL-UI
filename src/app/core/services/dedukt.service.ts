@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {
   Employee,
@@ -27,6 +27,15 @@ import { Bank, BanksResponse } from '../models/bank.model';
 import { WalletData, WalletBalanceResponse } from '../models/wallet.model';
 import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
+
+export interface EmployeeSearchState {
+  employer: string;
+  criteria: string;
+  value: string;
+  bankId: string;
+  selectedEmployee: Employee | null;
+  employeeDeductions: Deduction[];
+}
 
 function mapApiEmployer(e: ApiEmployer): EmployerOption {
   return {
@@ -96,7 +105,7 @@ function mapApiDeduction(item: ApiDeduction): Deduction {
 
 function mapApiCancellation(item: ApiCancellation): Cancellation {
   return {
-    id: item.uuid || item.id || `CAN-${Math.floor(100 + Math.random() * 900)}`,
+    id: item.uuid || item.id || `CAN-${Date.now()}`,
     customer: item.customer || 'Customer',
     serviceNumber: item.employee_service_number || item.serviceNumber || '',
     loanAmount: item.loan_amount || item.loanAmount || 0,
@@ -114,23 +123,53 @@ function mapApiCancellation(item: ApiCancellation): Cancellation {
   providedIn: 'root'
 })
 export class DeduktService {
-  // Signals
+  // Employers Signals
   readonly employers = signal<EmployerOption[]>([]);
   readonly loadingEmployers = signal<boolean>(false);
+
+  // Deductions Signals
   readonly loadingDeductions = signal<boolean>(false);
-  readonly loadingCancellations = signal<boolean>(false);
-
   readonly deductionsTotal = signal<number>(0);
-  readonly cancellationsTotal = signal<number>(0);
+  private deductions = signal<Deduction[]>([]);
+  readonly allDeductions = this.deductions.asReadonly();
 
-  // Banks signals
+  // Cancellations Signals
+  readonly loadingCancellations = signal<boolean>(false);
+  readonly cancellationsTotal = signal<number>(0);
+  private cancellations = signal<Cancellation[]>([]);
+  readonly allCancellations = this.cancellations.asReadonly();
+
+  // Banks Signals
   readonly banks = signal<Bank[]>([]);
   readonly loadingBanks = signal<boolean>(false);
 
-  // Wallet signals
+  // Wallet Signals
   readonly walletBalance = signal<number>(0);
   readonly walletData = signal<WalletData | null>(null);
   readonly loadingWallet = signal<boolean>(false);
+
+  // Computed metrics
+  readonly totalLoanAmountSum = computed(() =>
+    this.deductions().reduce((sum, d) => sum + (d.loanAmount || 0), 0)
+  );
+
+  // Employee Search Persistent State
+  readonly employeeSearchState = signal<EmployeeSearchState | null>(null);
+
+  setEmployeeSearchState(state: EmployeeSearchState | null) {
+    this.employeeSearchState.set(state);
+  }
+
+  updateSearchedEmployee(employee: Employee | null, deductionsList: Deduction[]) {
+    const current = this.employeeSearchState();
+    if (current) {
+      this.employeeSearchState.set({
+        ...current,
+        selectedEmployee: employee,
+        employeeDeductions: deductionsList
+      });
+    }
+  }
 
   constructor(
     private http: HttpClient,
@@ -139,7 +178,6 @@ export class DeduktService {
 
   // ── GET /dedukt/utilities/banks ──────────────────────────────────────────────
   async loadBanks(): Promise<Bank[]> {
-
     this.loadingBanks.set(true);
     try {
       const res = await firstValueFrom(
@@ -149,9 +187,9 @@ export class DeduktService {
         this.banks.set(res.data);
         return res.data;
       }
-      throw new Error('Empty banks list from API');
-    } catch (err) {
-      console.warn('Failed to load banks from API, using fallback banks directory', err);
+      this.banks.set(this.fallbackBanks);
+      return this.fallbackBanks;
+    } catch {
       this.banks.set(this.fallbackBanks);
       return this.fallbackBanks;
     } finally {
@@ -191,8 +229,7 @@ export class DeduktService {
       });
 
       return numericBalance;
-    } catch (err) {
-      console.warn('Failed to load wallet balance from API, using cached balance', err);
+    } catch {
       return this.walletBalance();
     } finally {
       this.loadingWallet.set(false);
@@ -208,12 +245,17 @@ export class DeduktService {
           params: { search_text: searchText }
         })
       );
-      const mapped = (res.data || []).map(mapApiEmployer);
-      this.employers.set(mapped);
-      return mapped;
+      if (res?.data && Array.isArray(res.data)) {
+        const mapped = res.data.map(mapApiEmployer);
+        this.employers.set(mapped);
+        return mapped;
+      }
+      this.employers.set([]);
+      return [];
     } catch (err) {
-      console.warn('Failed to load employers from API, using cached/fallback list', err);
-      return this.employers();
+      console.warn('Load employers warning:', err);
+      this.employers.set([]);
+      return [];
     } finally {
       this.loadingEmployers.set(false);
     }
@@ -236,13 +278,16 @@ export class DeduktService {
           params: httpParams
         })
       );
-      const mapped = (res.data || []).map(mapApiDeduction);
-      this.deductions.set(mapped);
-      this.deductionsTotal.set(res.pagination?.total ?? mapped.length);
-      return mapped;
-    } catch (err: any) {
-      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load deductions.';
-      console.warn('Failed to load deductions from API:', msg);
+      if (res?.data && Array.isArray(res.data)) {
+        const mapped = res.data.map(mapApiDeduction);
+        this.deductions.set(mapped);
+        this.deductionsTotal.set(res.pagination?.total ?? mapped.length);
+        return mapped;
+      }
+      this.deductions.set([]);
+      this.deductionsTotal.set(0);
+      return [];
+    } catch {
       this.deductions.set([]);
       this.deductionsTotal.set(0);
       return [];
@@ -268,13 +313,16 @@ export class DeduktService {
           params: httpParams
         })
       );
-      const mapped = (res.data || []).map(mapApiCancellation);
-      this.cancellations.set(mapped);
-      this.cancellationsTotal.set(res.pagination?.total ?? mapped.length);
-      return mapped;
-    } catch (err: any) {
-      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load cancellations.';
-      console.warn('Failed to load cancellations from API:', msg);
+      if (res?.data && Array.isArray(res.data)) {
+        const mapped = res.data.map(mapApiCancellation);
+        this.cancellations.set(mapped);
+        this.cancellationsTotal.set(res.pagination?.total ?? mapped.length);
+        return mapped;
+      }
+      this.cancellations.set([]);
+      this.cancellationsTotal.set(0);
+      return [];
+    } catch {
       this.cancellations.set([]);
       this.cancellationsTotal.set(0);
       return [];
@@ -291,13 +339,13 @@ export class DeduktService {
       );
       this.toastService.success(
         'Deduction Created',
-        res.message || 'Loan request pending DigiSign verification.'
+        res.message || 'Loan request created successfully.'
       );
       await this.loadDeductions();
       return true;
-    } catch (err: any) {
-      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to create deduction mandate.';
-      this.toastService.error('Create Deduction Failed', msg);
+    } catch (err) {
+      const msg = this.extractMessage(err, 'Failed to create deduction mandate.');
+      this.toastService.error('Deduction Creation Failed', msg);
       return false;
     }
   }
@@ -309,10 +357,11 @@ export class DeduktService {
         this.http.delete(`${environment.apiUrl}/dedukt/deductions/${uuid}`)
       );
       this.deductions.update(list => list.filter(d => d.uuid !== uuid && d.id !== uuid));
+      this.deductionsTotal.update(t => Math.max(0, t - 1));
       this.toastService.success('Deduction Deleted', 'Deduction mandate successfully deleted.');
       return true;
-    } catch (err: any) {
-      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to delete deduction mandate.';
+    } catch (err) {
+      const msg = this.extractMessage(err, 'Failed to delete deduction mandate.');
       this.toastService.error('Delete Failed', msg);
       return false;
     }
@@ -324,17 +373,16 @@ export class DeduktService {
       await firstValueFrom(
         this.http.post(`${environment.apiUrl}/dedukt/deductions/stop`, {
           deduction_uuid: uuid,
-          reason: reason || 'Stopped by Officer'
+          reason: reason || 'Officer confirmed stoppage request'
         })
       );
-      this.deductions.update(list =>
-        list.map(d => (d.uuid === uuid || d.id === uuid) ? { ...d, status: 'CANCELLED', remarks: reason || d.remarks } : d)
-      );
-      this.toastService.success('Deduction Stopped', 'Deduction mandate successfully stopped.');
+      await this.loadDeductions();
+      await this.loadCancellations();
+      this.toastService.success('Stoppage Submitted', 'Deduction mandate stoppage request submitted successfully.');
       return true;
-    } catch (err: any) {
-      const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to stop deduction mandate.';
-      this.toastService.error('Stop Failed', msg);
+    } catch (err) {
+      const msg = this.extractMessage(err, 'Failed to submit stoppage request.');
+      this.toastService.error('Stoppage Request Failed', msg);
       return false;
     }
   }
@@ -347,35 +395,41 @@ export class DeduktService {
     bankId: string | number = '1'
   ): Promise<Employee | null> {
     const trimmedVal = (value || '').trim();
-    if (!trimmedVal) return null;
+    if (!trimmedVal || !companyUuid) return null;
 
-    if (companyUuid) {
-      try {
-        let endpoint = '';
-        if (criteria === 'Account Number') {
-          endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/banks/${bankId}/accounts/${encodeURIComponent(trimmedVal)}`;
-        } else {
-          endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/${encodeURIComponent(trimmedVal)}`;
-        }
-
-        const res = await firstValueFrom(
-          this.http.get<EmployeeSearchResponse>(endpoint)
-        );
-
-        if (res?.data) {
-          const emp = mapApiEmployee(res.data);
-          return emp;
-        }
-      } catch (err: any) {
-        const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Employee record not found.';
-        this.toastService.warning('Search Result', msg);
-        return null;
+    try {
+      let endpoint = '';
+      if (criteria === 'Account Number') {
+        endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/banks/${bankId}/accounts/${encodeURIComponent(trimmedVal)}`;
+      } else {
+        endpoint = `${environment.apiUrl}/dedukt/companies/${companyUuid}/employees/${encodeURIComponent(trimmedVal)}`;
       }
+
+      const res = await firstValueFrom(
+        this.http.get<EmployeeSearchResponse>(endpoint)
+      );
+
+      if (res?.data) {
+        return mapApiEmployee(res.data);
+      }
+      this.toastService.error('Not Found', 'No employee record found matching search criteria.');
+      return null;
+    } catch (err) {
+      const msg = this.extractMessage(err, 'Employee not found or search failed.');
+      this.toastService.error('Search Failed', msg);
+      return null;
     }
-    return null;
   }
 
-  // Fallback Banks List (88 Nigerian Banks)
+  // Get employee deductions
+  getEmployeeDeductions(serviceNumber: string): Deduction[] {
+    if (!serviceNumber) return [];
+    return this.deductions().filter(
+      d => (d.serviceNumber || '').toLowerCase() === serviceNumber.toLowerCase()
+    );
+  }
+
+  // Fallback Banks List (Standard Nigerian Financial Institutions)
   readonly fallbackBanks: Bank[] = [
     { id: 1, name: '9mobile 9Payment Service Bank', code: '120001' },
     { id: 2, name: 'Abbey Mortgage Bank', code: '801' },
@@ -467,25 +521,6 @@ export class DeduktService {
     { id: 87, name: 'Zenith Bank', code: '057' }
   ];
 
-  private deductions = signal<Deduction[]>([]);
-  private cancellations = signal<Cancellation[]>([]);
-
-  // Readonly signals
-  readonly allDeductions = this.deductions.asReadonly();
-  readonly allCancellations = this.cancellations.asReadonly();
-
-  // Computed metrics
-  readonly totalLoanAmountSum = computed(() => 
-    this.deductions().reduce((sum, d) => sum + (d.loanAmount || 0), 0)
-  );
-
-  // Get employee deductions
-  getEmployeeDeductions(serviceNumber: string): Deduction[] {
-    return this.deductions().filter(
-      d => (d.serviceNumber || '').toLowerCase() === (serviceNumber || '').toLowerCase()
-    );
-  }
-
   // Export to CSV helper
   exportToCsv(filename: string, rows: object[]) {
     if (!rows || !rows.length) {
@@ -509,5 +544,15 @@ export class DeduktService {
     link.click();
     document.body.removeChild(link);
     this.toastService.success('Export Successful', `Exported ${rows.length} records to ${filename}.csv`);
+  }
+
+  private extractMessage(err: unknown, fallback: string): string {
+    const httpErr = err as HttpErrorResponse;
+    return (
+      httpErr?.error?.message?.message ??
+      httpErr?.error?.message ??
+      httpErr?.message ??
+      fallback
+    );
   }
 }

@@ -8,6 +8,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
 import { CreateDeductionModalComponent } from '../../components/create-deduction-modal/create-deduction-modal.component';
 import { CancelDeductionModalComponent } from '../../components/cancel-deduction-modal/cancel-deduction-modal.component';
+import { DeleteDeductionModalComponent } from '../../components/delete-deduction-modal/delete-deduction-modal.component';
 
 @Component({
   selector: 'app-employee-search',
@@ -17,7 +18,8 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
     ReactiveFormsModule, 
     CurrencyNairaPipe, 
     CreateDeductionModalComponent, 
-    CancelDeductionModalComponent
+    CancelDeductionModalComponent,
+    DeleteDeductionModalComponent
   ],
   template: `
     <div class="space-y-8">
@@ -58,7 +60,11 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                 <span class="text-rose-500 font-bold">*</span> Employer
               </label>
               <div class="relative">
-                <select formControlName="employer" class="dedukt-input appearance-none bg-white pr-10">
+                <select 
+                  formControlName="employer" 
+                  class="dedukt-input appearance-none bg-white pr-10"
+                  [ngClass]="{'border-rose-500': isFieldInvalid('employer')}"
+                >
                   <option value="" disabled>Select Employer</option>
                   @for (emp of deduktService.employers(); track emp.uuid) {
                     <option [value]="emp.uuid">{{ emp.name }}</option>
@@ -77,6 +83,9 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                   }
                 </div>
               </div>
+              @if (isFieldInvalid('employer')) {
+                <p class="text-xs text-rose-500 mt-1">Please select an employer</p>
+              }
             </div>
 
             <!-- Criteria (Only two items: Service Number & Account Number) -->
@@ -85,7 +94,13 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                 <span class="text-rose-500 font-bold">*</span> Criteria
               </label>
               <div class="relative">
-                <select formControlName="criteria" (change)="onCriteriaChange()" class="dedukt-input appearance-none bg-white pr-10">
+                <select 
+                  formControlName="criteria" 
+                  (change)="onCriteriaChange()" 
+                  class="dedukt-input appearance-none bg-white pr-10"
+                  [ngClass]="{'border-rose-500': isFieldInvalid('criteria')}"
+                >
+                  <option value="" disabled>Select Criteria</option>
                   <option value="Service Number">Service Number</option>
                   <option value="Account Number">Account Number</option>
                 </select>
@@ -95,6 +110,9 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                   </svg>
                 </div>
               </div>
+              @if (isFieldInvalid('criteria')) {
+                <p class="text-xs text-rose-500 mt-1">Please select a search criteria</p>
+              }
             </div>
 
             <!-- Bank Selection (Visible when Account Number is selected) -->
@@ -104,7 +122,11 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                   <span class="text-rose-500 font-bold">*</span> Select Bank
                 </label>
                 <div class="relative">
-                  <select formControlName="bankId" class="dedukt-input appearance-none bg-white pr-10">
+                  <select 
+                    formControlName="bankId" 
+                    class="dedukt-input appearance-none bg-white pr-10"
+                    [ngClass]="{'border-rose-500': isFieldInvalid('bankId')}"
+                  >
                     <option value="" disabled>Select Bank</option>
                     @for (bank of deduktService.banks(); track bank.id) {
                       <option [value]="bank.id">{{ bank.name }}</option>
@@ -133,12 +155,20 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
             <div>
               <label class="block text-sm font-semibold text-[#101828] mb-2">
                 <span class="text-rose-500 font-bold">*</span> 
-                {{ searchForm.get('criteria')?.value === 'Account Number' ? 'Account Number' : 'Service Number' }}
+                {{ 
+                  searchForm.get('criteria')?.value === 'Account Number' 
+                    ? 'Account Number' 
+                    : (searchForm.get('criteria')?.value === 'Service Number' ? 'Service Number' : 'Search Value') 
+                }}
               </label>
               <input 
                 type="text" 
                 formControlName="value"
-                [placeholder]="searchForm.get('criteria')?.value === 'Account Number' ? 'e.g. 0123984712 (10-digit NUBAN)' : 'e.g. 01ED124420040389 or SN-994821'"
+                [placeholder]="
+                  searchForm.get('criteria')?.value === 'Account Number' 
+                    ? 'Enter 10-digit account number' 
+                    : 'Enter service number'
+                "
                 class="dedukt-input font-mono"
                 [ngClass]="{'border-rose-500': isFieldInvalid('value')}"
               />
@@ -182,15 +212,29 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                   <div>
                     <div class="flex items-center gap-2">
                       <h2 class="text-xl font-bold text-white">{{ emp.fullName }}</h2>
-                      <span class="px-2 py-0.5 rounded-full bg-[#12B76A]/20 text-[#12B76A] border border-[#12B76A]/40 text-xs font-semibold">
-                        {{ emp.status }}
+                      <span 
+                        class="px-2.5 py-0.5 rounded-full text-xs font-semibold border inline-flex items-center gap-1.5"
+                        [ngClass]="{
+                          'bg-emerald-500/20 text-emerald-300 border-emerald-400/40': emp.status === 'Active',
+                          'bg-amber-500/20 text-amber-300 border-amber-400/40': emp.status === 'Suspended',
+                          'bg-rose-500/20 text-rose-300 border-rose-400/40': emp.status === 'Retired'
+                        }"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full" 
+                          [ngClass]="{
+                            'bg-emerald-400': emp.status === 'Active',
+                            'bg-amber-400': emp.status === 'Suspended',
+                            'bg-rose-400': emp.status === 'Retired'
+                          }"
+                        ></span>
+                        <span>{{ emp.status }}</span>
                       </span>
                     </div>
                     <p class="text-xs text-[#E6F4F5] mt-0.5">{{ emp.employer }} &bull; {{ emp.ministryOrAgency }}</p>
                   </div>
                 </div>
 
-                <!-- Action Buttons: Create Deduction & Cancel Deduction -->
+                <!-- Action Buttons: Create Deduction & Stoppage Request -->
                 <div class="flex items-center gap-2">
                   <button 
                     (click)="openCreateModal()"
@@ -203,13 +247,13 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                   </button>
 
                   <button 
-                    (click)="openCancelModalForEmployee()"
-                    class="px-3.5 py-2 bg-white/10 hover:bg-rose-600/90 text-white rounded-lg text-xs font-bold transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
+                    (click)="openStopModalForEmployee()"
+                    class="px-3.5 py-2 bg-white/10 hover:bg-amber-600/90 text-white rounded-lg text-xs font-bold transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
                   >
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
                     </svg>
-                    <span>Cancel Deduction</span>
+                    <span>Stoppage Request</span>
                   </button>
                 </div>
               </div>
@@ -301,17 +345,38 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
                               <td class="p-2.5 font-semibold text-[#081A4D]">{{ item.repaymentAmount | naira }}</td>
                               <td class="p-2.5">{{ item.tenor }} mos</td>
                               <td class="p-2.5">
-                                <span class="px-2 py-0.5 rounded-full bg-[#12B76A]/15 text-[#12B76A] font-semibold text-[10px]">
-                                  {{ item.status }}
+                                <span 
+                                  class="px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wider inline-flex items-center gap-1.5 border shadow-2xs"
+                                  [ngClass]="getDeductionStatusBadgeClass(item.status)"
+                                >
+                                  <span class="w-1.5 h-1.5 rounded-full" [ngClass]="getDeductionStatusDotClass(item.status)"></span>
+                                  <span>{{ item.status }}</span>
                                 </span>
                               </td>
                               <td class="p-2.5 text-right">
-                                <button 
-                                  (click)="openCancelModalForDeduction(item)"
-                                  class="text-rose-600 hover:text-rose-800 font-semibold text-[11px] underline"
-                                >
-                                  Cancel Mandate
-                                </button>
+                                @if (isSetupInCurrentMonth(item)) {
+                                  <button 
+                                    (click)="openDeleteModalForDeduction(item)"
+                                    class="text-rose-600 hover:text-rose-800 font-semibold text-[11px] underline cursor-pointer inline-flex items-center gap-1"
+                                    title="Permanently delete mandate set up in the current month via /dedukt/deductions/:uuid"
+                                  >
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                    <span>Delete Mandate</span>
+                                  </button>
+                                } @else {
+                                  <button 
+                                    (click)="openStopModalForDeduction(item)"
+                                    class="text-amber-700 hover:text-amber-900 font-semibold text-[11px] underline cursor-pointer inline-flex items-center gap-1"
+                                    title="Submit deduction stoppage request via /dedukt/deductions/stop"
+                                  >
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                                    </svg>
+                                    <span>Stoppage Request</span>
+                                  </button>
+                                }
                               </td>
                             </tr>
                           }
@@ -356,13 +421,22 @@ import { CancelDeductionModalComponent } from '../../components/cancel-deduction
         ></app-create-deduction-modal>
       }
 
-      <!-- Cancel Deduction Modal -->
-      @if (showCancelModal() && activeDeductionToCancel()) {
+      <!-- Stoppage Request Modal (POST /dedukt/deductions/stop) -->
+      @if (showStopModal() && activeDeductionToStop()) {
         <app-cancel-deduction-modal 
-          [deduction]="activeDeductionToCancel()!" 
-          (close)="showCancelModal.set(false)"
-          (cancelled)="onDeductionCancelled()"
+          [deduction]="activeDeductionToStop()!" 
+          (close)="showStopModal.set(false)"
+          (cancelled)="onDeductionStopped()"
         ></app-cancel-deduction-modal>
+      }
+
+      <!-- Delete Mandate Modal (DELETE /dedukt/deductions/:uuid - current month setup only) -->
+      @if (showDeleteModal() && activeDeductionToDelete()) {
+        <app-delete-deduction-modal 
+          [deduction]="activeDeductionToDelete()!" 
+          (close)="showDeleteModal.set(false)"
+          (deleted)="onDeductionDeleted()"
+        ></app-delete-deduction-modal>
       }
 
     </div>
@@ -378,41 +452,62 @@ export class EmployeeSearchComponent implements OnInit {
   employeeDeductions = signal<Deduction[]>([]);
   
   showCreateModal = signal(false);
-  showCancelModal = signal(false);
-  activeDeductionToCancel = signal<Deduction | null>(null);
+  showStopModal = signal(false);
+  showDeleteModal = signal(false);
+  activeDeductionToStop = signal<Deduction | null>(null);
+  activeDeductionToDelete = signal<Deduction | null>(null);
 
   searchForm: FormGroup = this.fb.group({
     employer: ['', [Validators.required]],
-    criteria: ['Service Number', [Validators.required]],
+    criteria: ['', [Validators.required]],
     value: ['', [Validators.required]],
     bankId: [''],
   });
 
   async ngOnInit() {
-    const employers = await this.deduktService.loadEmployers();
-    if (employers.length > 0) {
-      const current = this.searchForm.get('employer')?.value;
-      const exists = employers.some(e => e.uuid === current);
-      if (!exists) {
-        this.searchForm.patchValue({ employer: employers[0].uuid });
+    // 1. Restore search state from DeduktService if one already exists
+    const savedState = this.deduktService.employeeSearchState();
+    if (savedState) {
+      this.searchForm.patchValue({
+        employer: savedState.employer,
+        criteria: savedState.criteria,
+        value: savedState.value,
+        bankId: savedState.bankId
+      });
+      this.selectedEmployee.set(savedState.selectedEmployee);
+      this.employeeDeductions.set(savedState.employeeDeductions);
+
+      if (savedState.criteria === 'Account Number') {
+        this.searchForm.get('bankId')?.setValidators([Validators.required]);
+        this.searchForm.get('bankId')?.updateValueAndValidity();
       }
     }
-    // Preload banks
-    const banks = await this.deduktService.loadBanks();
-    if (banks.length > 0 && !this.searchForm.get('bankId')?.value) {
-      this.searchForm.patchValue({ bankId: String(banks[0].id) });
-    }
+
+    // 2. Preload employers and banks in background without forcing any defaults
+    this.deduktService.loadEmployers();
+    this.deduktService.loadBanks();
+  }
+
+  isSetupInCurrentMonth(deduction: Deduction): boolean {
+    const dateStr = deduction.createdAt || deduction.startDate;
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   }
 
   async onCriteriaChange() {
     const crit = this.searchForm.get('criteria')?.value;
+    const bankControl = this.searchForm.get('bankId');
     if (crit === 'Account Number') {
-      const banks = await this.deduktService.loadBanks();
-      const currentBankId = this.searchForm.get('bankId')?.value;
-      if (!currentBankId && banks.length > 0) {
-        this.searchForm.patchValue({ bankId: String(banks[0].id) });
-      }
+      bankControl?.setValidators([Validators.required]);
+      this.deduktService.loadBanks();
+    } else {
+      bankControl?.clearValidators();
+      bankControl?.setValue('');
     }
+    bankControl?.updateValueAndValidity();
   }
 
   isFieldInvalid(fieldName: string): boolean {
@@ -432,8 +527,9 @@ export class EmployeeSearchComponent implements OnInit {
     const result = await this.deduktService.searchEmployee(employer, criteria, value, bankId || '1');
     this.selectedEmployee.set(result);
 
+    let deductions: Deduction[] = [];
     if (result) {
-      this.refreshEmployeeDeductions(result.serviceNumber);
+      deductions = this.refreshEmployeeDeductions(result.serviceNumber);
       // Refresh wallet balance after successful employee search
       await this.deduktService.loadWalletBalance();
       this.toastService.success('Employee Verified', `Found records for ${result.fullName} (${result.serviceNumber}).`);
@@ -441,51 +537,103 @@ export class EmployeeSearchComponent implements OnInit {
       this.employeeDeductions.set([]);
     }
 
+    // Persist search state in service so it remains when navigating to other modules and back
+    this.deduktService.setEmployeeSearchState({
+      employer,
+      criteria,
+      value,
+      bankId: bankId || '',
+      selectedEmployee: result,
+      employeeDeductions: deductions
+    });
+
     this.isSearching.set(false);
   }
 
-  refreshEmployeeDeductions(serviceNumber: string) {
+  refreshEmployeeDeductions(serviceNumber: string): Deduction[] {
     const list = this.deduktService.getEmployeeDeductions(serviceNumber);
     this.employeeDeductions.set(list);
+    return list;
   }
 
   openCreateModal() {
     this.showCreateModal.set(true);
   }
 
-  openCancelModalForEmployee() {
+  openStopModalForEmployee() {
     const activeList = this.employeeDeductions();
     if (activeList.length > 0) {
-      this.activeDeductionToCancel.set(activeList[0]);
-      this.showCancelModal.set(true);
+      this.activeDeductionToStop.set(activeList[0]);
+      this.showStopModal.set(true);
     } else {
-      this.toastService.info('No Active Mandate', 'This employee has no active deduction mandate to cancel.');
+      this.toastService.info('No Active Mandate', 'This employee has no active deduction mandate for a stoppage request.');
     }
   }
 
-  openCancelModalForDeduction(deduction: Deduction) {
-    this.activeDeductionToCancel.set(deduction);
-    this.showCancelModal.set(true);
+  openStopModalForDeduction(deduction: Deduction) {
+    this.activeDeductionToStop.set(deduction);
+    this.showStopModal.set(true);
+  }
+
+  openDeleteModalForDeduction(deduction: Deduction) {
+    this.activeDeductionToDelete.set(deduction);
+    this.showDeleteModal.set(true);
   }
 
   async onDeductionCreated() {
     this.showCreateModal.set(false);
+    await this.refreshCurrentEmployeeData();
+  }
+
+  async onDeductionStopped() {
+    this.showStopModal.set(false);
+    this.activeDeductionToStop.set(null);
+    await this.refreshCurrentEmployeeData();
+  }
+
+  async onDeductionDeleted() {
+    this.showDeleteModal.set(false);
+    this.activeDeductionToDelete.set(null);
+    await this.refreshCurrentEmployeeData();
+  }
+
+  private async refreshCurrentEmployeeData() {
     const emp = this.selectedEmployee();
     if (emp) {
       const updated = await this.deduktService.searchEmployee(emp.companyUuid || '', 'Service Number', emp.serviceNumber);
       if (updated) this.selectedEmployee.set(updated);
-      this.refreshEmployeeDeductions(emp.serviceNumber);
+      const deductions = this.refreshEmployeeDeductions(emp.serviceNumber);
+      this.deduktService.updateSearchedEmployee(updated || emp, deductions);
     }
   }
 
-  async onDeductionCancelled() {
-    this.showCancelModal.set(false);
-    this.activeDeductionToCancel.set(null);
-    const emp = this.selectedEmployee();
-    if (emp) {
-      const updated = await this.deduktService.searchEmployee(emp.companyUuid || '', 'Service Number', emp.serviceNumber);
-      if (updated) this.selectedEmployee.set(updated);
-      this.refreshEmployeeDeductions(emp.serviceNumber);
+  getDeductionStatusBadgeClass(status: string): string {
+    const s = (status || '').toUpperCase().trim();
+    if (['CANCELLED', 'STOPPED', 'REJECTED', 'FAILED'].includes(s)) {
+      return 'bg-rose-50 text-rose-700 border-rose-300';
     }
+    if (['NEW'].includes(s)) {
+      return 'bg-sky-50 text-sky-700 border-sky-300';
+    }
+    if (['PENDING', 'PENDING_VERIFICATION', 'PENDING_APPROVAL', 'PROCESSING'].includes(s)) {
+      return 'bg-amber-50 text-amber-800 border-amber-300';
+    }
+    if (['ACTIVE', 'APPROVED', 'RUNNING'].includes(s)) {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-300';
+    }
+    if (['COMPLETED', 'SETTLED', 'LIQUIDATED', 'PAID'].includes(s)) {
+      return 'bg-indigo-50 text-indigo-700 border-indigo-300';
+    }
+    return 'bg-slate-50 text-slate-700 border-slate-300';
+  }
+
+  getDeductionStatusDotClass(status: string): string {
+    const s = (status || '').toUpperCase().trim();
+    if (['CANCELLED', 'STOPPED', 'REJECTED', 'FAILED'].includes(s)) return 'bg-rose-500';
+    if (['NEW'].includes(s)) return 'bg-sky-500';
+    if (['PENDING', 'PENDING_VERIFICATION', 'PENDING_APPROVAL', 'PROCESSING'].includes(s)) return 'bg-amber-500';
+    if (['ACTIVE', 'APPROVED', 'RUNNING'].includes(s)) return 'bg-emerald-500';
+    if (['COMPLETED', 'SETTLED', 'LIQUIDATED', 'PAID'].includes(s)) return 'bg-indigo-500';
+    return 'bg-slate-400';
   }
 }

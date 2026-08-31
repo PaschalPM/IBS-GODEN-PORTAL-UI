@@ -80,6 +80,22 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
               />
             </div>
 
+            <!-- Monthly Interest Rate (%) -->
+            <div>
+              <label class="block text-xs font-semibold text-[#354778] mb-1">
+                Monthly Interest Rate (%) <span class="text-rose-500">*</span>
+              </label>
+              <input 
+                type="number" 
+                formControlName="interest_rate" 
+                (input)="onInterestRateChange()"
+                step="0.1"
+                min="0"
+                placeholder="e.g. 2.5"
+                class="dedukt-input"
+              />
+            </div>
+
             <!-- Monthly Repayment Amount -->
             <div>
               <label class="block text-xs font-semibold text-[#354778] mb-1">
@@ -96,7 +112,7 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
             </div>
 
             <!-- Loan Released Date -->
-            <div>
+            <div class="sm:col-span-2">
               <label class="block text-xs font-semibold text-[#354778] mb-1">
                 Loan Released Date <span class="text-rose-500">*</span>
               </label>
@@ -232,13 +248,15 @@ export class CreateDeductionModalComponent implements OnInit {
 
   ngOnInit() {
     const today = new Date().toISOString().split('T')[0];
+    const initialRate = this.settingsService.monthlyInterestRate() || 1.5;
     this.form = this.fb.group({
+      interest_rate: [initialRate, [Validators.required, Validators.min(0)]],
       loan_amount: ['', [Validators.required, Validators.min(1000)]],
       number_of_repayments: [12, [Validators.required, Validators.min(1)]],
       repayment_amount: ['', [Validators.required, Validators.min(100)]],
       loan_released_date: [today, [Validators.required]],
       bvn: [this.employee?.bvn || '', [Validators.required]],
-      nin: ['', [Validators.required]],
+      nin: [this.employee?.nin || '', [Validators.required]],
       email: [this.employee?.email || '', [Validators.required, Validators.email]],
       callback_email: ['', [Validators.required, Validators.email]],
       use_digi_sign: [true],
@@ -246,11 +264,20 @@ export class CreateDeductionModalComponent implements OnInit {
     });
   }
 
+  onInterestRateChange() {
+    const rate = Number(this.form.get('interest_rate')?.value);
+    if (!isNaN(rate)) {
+      this.settingsService.setMonthlyInterestRate(rate);
+      this.calculateRepayment();
+    }
+  }
+
   calculateRepayment() {
     const loan = Number(this.form.get('loan_amount')?.value || 0);
-    const tenor = Number(this.form.get('number_of_repayments')?.value || 5);
+    const tenor = Number(this.form.get('number_of_repayments')?.value || 12);
+    const rate = Number(this.form.get('interest_rate')?.value || 0);
     if (loan > 0 && tenor > 0) {
-      const monthlyRate = this.settingsService.monthlyInterestRate() / 100;
+      const monthlyRate = rate / 100;
       const totalInterest = loan * monthlyRate * tenor;
       const total = Math.round(loan + totalInterest);
       const monthly = Math.round(total / tenor);
@@ -295,4 +322,3 @@ export class CreateDeductionModalComponent implements OnInit {
     }
   }
 }
-
