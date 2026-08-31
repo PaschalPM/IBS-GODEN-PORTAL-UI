@@ -1,8 +1,7 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { DeduktService } from '../../../../core/services/dedukt.service';
-import { Cancellation } from '../../../../core/models/cancellation.model';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
 import { PaginationComponent } from '../../../../shared/components/pagination/pagination.component';
 

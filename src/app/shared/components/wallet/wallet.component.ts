@@ -85,12 +85,9 @@ import { CurrencyNairaPipe } from '../../pipes/currency-naira.pipe';
                 {{ deduktService.walletBalance() | naira }}
               </div>
               <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/10 text-[11px] text-[#E6F4F5]">
-                <!-- <span>Status: <strong class="text-[#86EFAC]">Active</strong></span> -->
                 <span>Currency: <strong>NGN</strong></span>
               </div>
             </div>
-
-            
 
             <!-- Actions -->
             <div class="flex items-center gap-2 mt-4 pt-3 border-t border-[#E4E7EC]">

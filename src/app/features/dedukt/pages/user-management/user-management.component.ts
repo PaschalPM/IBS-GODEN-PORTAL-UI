@@ -64,7 +64,8 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
           </div>
           <input 
             type="text" 
-            [(ngModel)]="searchQuery" 
+            [ngModel]="searchQuery()" 
+            (ngModelChange)="searchQuery.set($event)"
             placeholder="Search for items"
             class="dedukt-input pl-9 text-xs"
           />
@@ -148,8 +149,8 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
               } @else {
                 <tr>
                   <td colspan="6" class="p-12 text-center text-[#717680] text-sm">
-                    @if (searchQuery) {
-                      No users matching "{{ searchQuery }}"
+                    @if (searchQuery()) {
+                      No users matching "{{ searchQuery() }}"
                     } @else {
                       No users found. Click <strong>New User</strong> to add one.
                     }
@@ -233,7 +234,7 @@ import { ChangeRoleModalComponent } from '../../components/change-role-modal/cha
 export class UserManagementComponent implements OnInit {
   userService = inject(UserService);
 
-  searchQuery = '';
+  searchQuery = signal('');
   showNewUserModal = signal(false);
   showChangePasswordModal = signal(false);
   userToChangeRole = signal<PortalUser | null>(null);
@@ -243,7 +244,7 @@ export class UserManagementComponent implements OnInit {
 
   filteredUsers = computed(() => {
     const list = this.userService.users();
-    const q = this.searchQuery.trim().toLowerCase();
+    const q = this.searchQuery().trim().toLowerCase();
     if (!q) return list;
     return list.filter(u =>
       u.name.toLowerCase().includes(q) ||

@@ -4,7 +4,6 @@ import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { DeduktService } from '../../../../core/services/dedukt.service';
 import { Employee } from '../../../../core/models/employee.model';
 import { Deduction } from '../../../../core/models/deduction.model';
-import { Bank } from '../../../../core/models/bank.model';
 import { ToastService } from '../../../../core/services/toast.service';
 import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe';
 import { CreateDeductionModalComponent } from '../../components/create-deduction-modal/create-deduction-modal.component';

@@ -15,8 +15,7 @@ import {
   DeductionsListResponse,
   DeductionQueryParams,
   CreateDeductionApiRequest,
-  CreateDeductionApiResponse,
-  CreateDeductionRequest
+  CreateDeductionApiResponse
 } from '../models/deduction.model';
 import {
   Cancellation,
@@ -26,7 +25,6 @@ import {
 } from '../models/cancellation.model';
 import { Bank, BanksResponse } from '../models/bank.model';
 import { WalletData, WalletBalanceResponse } from '../models/wallet.model';
-import { PortalUser, CreateUserDto, UserRole } from '../models/user.model';
 import { ToastService } from './toast.service';
 import { environment } from '../../../environments/environment';
 
@@ -244,33 +242,10 @@ export class DeduktService {
       return mapped;
     } catch (err: any) {
       const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load deductions.';
-      console.warn('Failed to load deductions from API, falling back to local dataset', msg);
-
-      let filtered = [...this.mockDeductions];
-      if (params?.search_text) {
-        const q = params.search_text.toLowerCase();
-        filtered = filtered.filter(d =>
-          d.customer.toLowerCase().includes(q) ||
-          d.serviceNumber.toLowerCase().includes(q) ||
-          d.referenceNumber.toLowerCase().includes(q)
-        );
-      }
-      if (params?.start_date) {
-        filtered = filtered.filter(d => !d.startDate || new Date(d.startDate) >= new Date(params.start_date!));
-      }
-      if (params?.end_date) {
-        filtered = filtered.filter(d => !d.endDate || new Date(d.endDate) <= new Date(params.end_date!));
-      }
-
-      this.deductionsTotal.set(filtered.length);
-
-      const page = params?.page || 1;
-      const perPage = params?.per_page || 10;
-      const startIdx = (page - 1) * perPage;
-      const paginated = filtered.slice(startIdx, startIdx + perPage);
-
-      this.deductions.set(paginated);
-      return paginated;
+      console.warn('Failed to load deductions from API:', msg);
+      this.deductions.set([]);
+      this.deductionsTotal.set(0);
+      return [];
     } finally {
       this.loadingDeductions.set(false);
     }
@@ -299,33 +274,10 @@ export class DeduktService {
       return mapped;
     } catch (err: any) {
       const msg = err?.error?.message?.message || err?.error?.message || err?.message || 'Failed to load cancellations.';
-      console.warn('Failed to load cancellations from API, falling back to local dataset', msg);
-
-      let filtered = [...this.mockCancellations];
-      if (params?.search_text) {
-        const q = params.search_text.toLowerCase();
-        filtered = filtered.filter(c =>
-          c.customer.toLowerCase().includes(q) ||
-          c.serviceNumber.toLowerCase().includes(q) ||
-          c.cancellationReason.toLowerCase().includes(q)
-        );
-      }
-      if (params?.start_date) {
-        filtered = filtered.filter(c => new Date(c.cancelledAt) >= new Date(params.start_date!));
-      }
-      if (params?.end_date) {
-        filtered = filtered.filter(c => new Date(c.cancelledAt) <= new Date(params.end_date!));
-      }
-
-      this.cancellationsTotal.set(filtered.length);
-
-      const page = params?.page || 1;
-      const perPage = params?.per_page || 10;
-      const startIdx = (page - 1) * perPage;
-      const paginated = filtered.slice(startIdx, startIdx + perPage);
-
-      this.cancellations.set(paginated);
-      return paginated;
+      console.warn('Failed to load cancellations from API:', msg);
+      this.cancellations.set([]);
+      this.cancellationsTotal.set(0);
+      return [];
     } finally {
       this.loadingCancellations.set(false);
     }
@@ -420,16 +372,7 @@ export class DeduktService {
         return null;
       }
     }
-
-    return this.employees().find(emp => {
-      if (criteria === 'Account Number') {
-        return emp.accountNumber.toLowerCase().includes(trimmedVal.toLowerCase());
-      } else {
-        return emp.serviceNumber.toLowerCase().includes(trimmedVal.toLowerCase()) ||
-               emp.ippisNumber.toLowerCase().includes(trimmedVal.toLowerCase()) ||
-               emp.fullName.toLowerCase().includes(trimmedVal.toLowerCase());
-      }
-    }) || null;
+    return null;
   }
 
   // Fallback Banks List (88 Nigerian Banks)
@@ -524,25 +467,12 @@ export class DeduktService {
     { id: 87, name: 'Zenith Bank', code: '057' }
   ];
 
-  // Local Employees Store
-  private employees = signal<Employee[]>([]);
-
-  // Local Deductions Dataset
-  private mockDeductions: Deduction[] = [];
-
-  // Local Cancellations Dataset
-  private mockCancellations: Cancellation[] = [];
-
   private deductions = signal<Deduction[]>([]);
   private cancellations = signal<Cancellation[]>([]);
-
-  // Local Users Database
-  private users = signal<PortalUser[]>([]);
 
   // Readonly signals
   readonly allDeductions = this.deductions.asReadonly();
   readonly allCancellations = this.cancellations.asReadonly();
-  readonly allUsers = this.users.asReadonly();
 
   // Computed metrics
   readonly totalLoanAmountSum = computed(() => 
@@ -551,140 +481,9 @@ export class DeduktService {
 
   // Get employee deductions
   getEmployeeDeductions(serviceNumber: string): Deduction[] {
-    return this.mockDeductions.filter(d => d.serviceNumber.toLowerCase() === serviceNumber.toLowerCase());
-  }
-
-  // Create Deduction
-  createDeduction(request: CreateDeductionRequest): Deduction {
-    const newId = `DED-${Math.floor(1000 + Math.random() * 9000)}`;
-    const today = new Date();
-    const startDateFormatted = request.startDate || `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear()}`;
-    
-    const endDateObj = new Date(today);
-    endDateObj.setMonth(endDateObj.getMonth() + Number(request.tenor));
-    const endDateFormatted = `${(endDateObj.getMonth() + 1).toString().padStart(2, '0')}/${endDateObj.getDate().toString().padStart(2, '0')}/${endDateObj.getFullYear()}`;
-
-    const newDeduction: Deduction = {
-      id: newId,
-      uuid: newId,
-      customer: request.customer,
-      employer: request.employer,
-      serviceNumber: request.serviceNumber,
-      loanAmount: Number(request.loanAmount),
-      startDate: startDateFormatted,
-      endDate: endDateFormatted,
-      tenor: Number(request.tenor),
-      repaymentAmount: Number(request.repaymentAmount),
-      totalRepayment: Number(request.totalRepayment),
-      status: 'Active',
-      referenceNumber: `REF-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-      description: request.purpose || 'Salary Deduction Mandate',
-      createdAt: new Date().toISOString()
-    };
-
-    this.mockDeductions.unshift(newDeduction);
-    this.deductions.update(list => [newDeduction, ...list]);
-    this.deductionsTotal.update(t => t + 1);
-
-    this.employees.update(emps => emps.map(emp => {
-      if (emp.serviceNumber === request.serviceNumber) {
-        const remaining = Math.max(0, emp.availableDeductibleBalance - newDeduction.repaymentAmount);
-        return { ...emp, availableDeductibleBalance: remaining };
-      }
-      return emp;
-    }));
-
-    this.toastService.success('Deduction Created', `Successfully created deduction ${newDeduction.referenceNumber} for ${request.customer}.`);
-    return newDeduction;
-  }
-
-  // Cancel Deduction
-  cancelDeduction(deductionId: string, reason: string): boolean {
-    const target = this.mockDeductions.find(d => d.id === deductionId);
-    if (!target) {
-      this.toastService.error('Error', 'Deduction record not found.');
-      return false;
-    }
-
-    this.mockDeductions = this.mockDeductions.filter(d => d.id !== deductionId);
-    this.deductions.update(list => list.filter(d => d.id !== deductionId));
-    this.deductionsTotal.update(t => Math.max(0, t - 1));
-
-    const today = new Date();
-    const dateFormatted = `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear()}`;
-
-    const cancellation: Cancellation = {
-      id: `CAN-${Math.floor(800 + Math.random() * 900)}`,
-      customer: target.customer,
-      serviceNumber: target.serviceNumber,
-      loanAmount: target.loanAmount,
-      tenor: target.tenor,
-      repaymentAmount: target.repaymentAmount,
-      totalRepayment: target.totalRepayment,
-      cancelledAt: dateFormatted,
-      cancellationReason: reason || 'Customer Requested Cancellation',
-      cancelledBy: 'Current Officer',
-      originalDeductionId: target.id
-    };
-
-    this.mockCancellations.unshift(cancellation);
-    this.cancellations.update(list => [cancellation, ...list]);
-    this.cancellationsTotal.update(t => t + 1);
-
-    this.employees.update(emps => emps.map(emp => {
-      if (emp.serviceNumber === target.serviceNumber) {
-        return { ...emp, availableDeductibleBalance: emp.availableDeductibleBalance + target.repaymentAmount };
-      }
-      return emp;
-    }));
-
-    this.toastService.success('Deduction Cancelled', `Deduction for ${target.customer} has been moved to Cancellations.`);
-    return true;
-  }
-
-  // User Management
-  changeUserRole(userId: string, newRole: UserRole): boolean {
-    let updated = false;
-    this.users.update(list => list.map(u => {
-      if (u.id === userId) {
-        updated = true;
-        return { ...u, role: newRole };
-      }
-      return u;
-    }));
-
-    if (updated) {
-      this.toastService.success('Role Updated', `User role changed to ${newRole}.`);
-    }
-    return updated;
-  }
-
-  deleteUser(userId: string): boolean {
-    const userToDelete = this.users().find(u => u.id === userId);
-    this.users.update(list => list.filter(u => u.id !== userId));
-    
-    if (userToDelete) {
-      this.toastService.info('User Deleted', `${userToDelete.name} has been removed from user management.`);
-    }
-    return true;
-  }
-
-  createUser(dto: CreateUserDto): PortalUser {
-    const name = `${dto.firstName} ${dto.lastName}`.trim();
-    const newUser: PortalUser = {
-      id: `usr-${Date.now()}`,
-      name: name,
-      branch: 'Main Branch',
-      email: dto.email,
-      phoneNumber: '',
-      role: dto.role as UserRole,
-      status: 'Active',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    this.users.update(list => [...list, newUser]);
-    this.toastService.success('User Created', `Added ${name} (${dto.role}) to Dedukt users.`);
-    return newUser;
+    return this.deductions().filter(
+      d => (d.serviceNumber || '').toLowerCase() === (serviceNumber || '').toLowerCase()
+    );
   }
 
   // Export to CSV helper
