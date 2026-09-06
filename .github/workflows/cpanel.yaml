@@ -35,6 +35,6 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           key: ${{ secrets.SSH_KEY }}
           source: "dist/ibs-golden-portal/browser/*"
-          target: ${{ secrets.CLIENT_SSH_TARGET }}
+          target: ${{ secrets.TARGET }}
           overwrite: true
           strip_components: 3
