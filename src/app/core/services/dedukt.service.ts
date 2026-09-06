@@ -268,7 +268,7 @@ export class DeduktService {
     let httpParams = new HttpParams();
     if (params?.page) httpParams = httpParams.set('page', params.page.toString());
     if (params?.per_page) httpParams = httpParams.set('per_page', params.per_page.toString());
-    if (params?.search_text) httpParams = httpParams.set('search_text', params.search_text);
+    if (params?.service_number) httpParams = httpParams.set('service_number', params.service_number);
     if (params?.start_date) httpParams = httpParams.set('start_date', params.start_date);
     if (params?.end_date) httpParams = httpParams.set('end_date', params.end_date);
 
@@ -368,12 +368,12 @@ export class DeduktService {
   }
 
   // ── POST /dedukt/deductions/stop ────────────────────────────────────────────
-  async stopDeduction(uuid: string, reason?: string): Promise<boolean> {
+  async stopDeduction(employeeUuid: string, companyUuid: string): Promise<boolean> {
     try {
       await firstValueFrom(
         this.http.post(`${environment.apiUrl}/dedukt/deductions/stop`, {
-          deduction_uuid: uuid,
-          reason: reason || 'Officer confirmed stoppage request'
+          employee_uuid: employeeUuid,
+          company_uuid: companyUuid
         })
       );
       await this.loadDeductions();
@@ -421,12 +421,26 @@ export class DeduktService {
     }
   }
 
-  // Get employee deductions
-  getEmployeeDeductions(serviceNumber: string): Deduction[] {
+  // ── GET /dedukt/deductions?service_number= (single employee, fetched live) ────
+  async loadEmployeeDeductions(serviceNumber: string): Promise<Deduction[]> {
     if (!serviceNumber) return [];
-    return this.deductions().filter(
-      d => (d.serviceNumber || '').toLowerCase() === serviceNumber.toLowerCase()
-    );
+    try {
+      const res = await firstValueFrom(
+        this.http.get<DeductionsListResponse>(`${environment.apiUrl}/dedukt/deductions`, {
+          // Cache-bust: the backend caches this GET for 60s by exact URL, which would
+          // otherwise serve stale results right after a create/stop/delete mutation.
+          params: { service_number: serviceNumber, _t: Date.now().toString() }
+        })
+      );
+      if (res?.data && Array.isArray(res.data)) {
+        return res.data.map(mapApiDeduction);
+      }
+      return [];
+    } catch (err) {
+      const msg = this.extractMessage(err, 'Failed to load deduction mandates.');
+      this.toastService.error('Load Failed', msg);
+      return [];
+    }
   }
 
   // Fallback Banks List (Standard Nigerian Financial Institutions)

@@ -324,7 +324,15 @@ import { DeleteDeductionModalComponent } from '../../components/delete-deduction
                 <div class="mt-6">
                   <h3 class="text-xs font-bold text-[#717680] uppercase tracking-wider mb-3">Active Deduction Mandates</h3>
                   
-                  @if (employeeDeductions().length > 0) {
+                  @if (loadingEmployeeDeductions()) {
+                    <div class="p-4 flex items-center justify-center gap-2 bg-gray-50 rounded-lg text-xs text-[#717680] border border-dashed border-[#C4C9D7]">
+                      <svg class="animate-spin w-4 h-4 text-[#008E97]" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                      </svg>
+                      Loading deduction mandates...
+                    </div>
+                  } @else if (employeeDeductions().length > 0) {
                     <div class="overflow-x-auto border border-[#E4E7EC] rounded-lg">
                       <table class="w-full text-xs text-left">
                         <thead class="bg-[#F8FAFC] text-[#1E293B] font-semibold uppercase">
@@ -423,8 +431,9 @@ import { DeleteDeductionModalComponent } from '../../components/delete-deduction
 
       <!-- Stoppage Request Modal (POST /dedukt/deductions/stop) -->
       @if (showStopModal() && activeDeductionToStop()) {
-        <app-cancel-deduction-modal 
-          [deduction]="activeDeductionToStop()!" 
+        <app-cancel-deduction-modal
+          [deduction]="activeDeductionToStop()!"
+          [employee]="selectedEmployee()!"
           (close)="showStopModal.set(false)"
           (cancelled)="onDeductionStopped()"
         ></app-cancel-deduction-modal>
@@ -450,6 +459,7 @@ export class EmployeeSearchComponent implements OnInit {
   isSearching = signal(false);
   selectedEmployee = signal<Employee | null>(null);
   employeeDeductions = signal<Deduction[]>([]);
+  loadingEmployeeDeductions = signal(false);
   
   showCreateModal = signal(false);
   showStopModal = signal(false);
@@ -459,7 +469,7 @@ export class EmployeeSearchComponent implements OnInit {
 
   searchForm: FormGroup = this.fb.group({
     employer: ['', [Validators.required]],
-    criteria: ['', [Validators.required]],
+    criteria: ['Service Number', [Validators.required]],
     value: ['', [Validators.required]],
     bankId: [''],
   });
@@ -529,7 +539,7 @@ export class EmployeeSearchComponent implements OnInit {
 
     let deductions: Deduction[] = [];
     if (result) {
-      deductions = this.refreshEmployeeDeductions(result.serviceNumber);
+      deductions = await this.refreshEmployeeDeductions(result.serviceNumber);
       // Refresh wallet balance after successful employee search
       await this.deduktService.loadWalletBalance();
       this.toastService.success('Employee Verified', `Found records for ${result.fullName} (${result.serviceNumber}).`);
@@ -550,9 +560,11 @@ export class EmployeeSearchComponent implements OnInit {
     this.isSearching.set(false);
   }
 
-  refreshEmployeeDeductions(serviceNumber: string): Deduction[] {
-    const list = this.deduktService.getEmployeeDeductions(serviceNumber);
+  async refreshEmployeeDeductions(serviceNumber: string): Promise<Deduction[]> {
+    this.loadingEmployeeDeductions.set(true);
+    const list = await this.deduktService.loadEmployeeDeductions(serviceNumber);
     this.employeeDeductions.set(list);
+    this.loadingEmployeeDeductions.set(false);
     return list;
   }
 
@@ -602,7 +614,7 @@ export class EmployeeSearchComponent implements OnInit {
     if (emp) {
       const updated = await this.deduktService.searchEmployee(emp.companyUuid || '', 'Service Number', emp.serviceNumber);
       if (updated) this.selectedEmployee.set(updated);
-      const deductions = this.refreshEmployeeDeductions(emp.serviceNumber);
+      const deductions = await this.refreshEmployeeDeductions(emp.serviceNumber);
       this.deduktService.updateSearchedEmployee(updated || emp, deductions);
     }
   }

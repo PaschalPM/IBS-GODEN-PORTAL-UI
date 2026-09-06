@@ -80,45 +80,30 @@ import { CurrencyNairaPipe } from '../../../../shared/pipes/currency-naira.pipe'
               />
             </div>
 
-            <!-- Monthly Interest Rate (%) -->
-            <div>
-              <label class="block text-xs font-semibold text-[#354778] mb-1">
-                Monthly Interest Rate (%) <span class="text-rose-500">*</span>
-              </label>
-              <input 
-                type="number" 
-                formControlName="interest_rate" 
-                (input)="onInterestRateChange()"
-                step="0.1"
-                min="0"
-                placeholder="e.g. 2.5"
-                class="dedukt-input"
-              />
-            </div>
-
             <!-- Monthly Repayment Amount -->
             <div>
               <label class="block text-xs font-semibold text-[#354778] mb-1">
                 Monthly Repayment (₦) <span class="text-rose-500">*</span>
               </label>
-              <input 
-                type="number" 
-                formControlName="repayment_amount" 
+              <input
+                type="number"
+                formControlName="repayment_amount"
                 class="dedukt-input font-semibold text-[#00498B]"
               />
+              <p class="text-[11px] text-[#717680] mt-1">Calculated using the preconfigured monthly interest rate ({{ settingsService.monthlyInterestRate() }}%).</p>
               @if (isExceedingBalance()) {
                 <p class="text-[11px] text-rose-600 mt-1">Warning: Monthly repayment exceeds available balance!</p>
               }
             </div>
 
             <!-- Loan Released Date -->
-            <div class="sm:col-span-2">
+            <div>
               <label class="block text-xs font-semibold text-[#354778] mb-1">
                 Loan Released Date <span class="text-rose-500">*</span>
               </label>
-              <input 
-                type="date" 
-                formControlName="loan_released_date" 
+              <input
+                type="date"
+                formControlName="loan_released_date"
                 class="dedukt-input"
               />
             </div>
@@ -241,16 +226,14 @@ export class CreateDeductionModalComponent implements OnInit {
 
   private fb = inject(FormBuilder);
   private deduktService = inject(DeduktService);
-  private settingsService = inject(SettingsService);
+  settingsService = inject(SettingsService);
 
   form!: FormGroup;
   isSubmitting = signal(false);
 
   ngOnInit() {
     const today = new Date().toISOString().split('T')[0];
-    const initialRate = this.settingsService.monthlyInterestRate() || 1.5;
     this.form = this.fb.group({
-      interest_rate: [initialRate, [Validators.required, Validators.min(0)]],
       loan_amount: ['', [Validators.required, Validators.min(1000)]],
       number_of_repayments: [12, [Validators.required, Validators.min(1)]],
       repayment_amount: ['', [Validators.required, Validators.min(100)]],
@@ -264,20 +247,11 @@ export class CreateDeductionModalComponent implements OnInit {
     });
   }
 
-  onInterestRateChange() {
-    const rate = Number(this.form.get('interest_rate')?.value);
-    if (!isNaN(rate)) {
-      this.settingsService.setMonthlyInterestRate(rate);
-      this.calculateRepayment();
-    }
-  }
-
   calculateRepayment() {
     const loan = Number(this.form.get('loan_amount')?.value || 0);
     const tenor = Number(this.form.get('number_of_repayments')?.value || 12);
-    const rate = Number(this.form.get('interest_rate')?.value || 0);
     if (loan > 0 && tenor > 0) {
-      const monthlyRate = rate / 100;
+      const monthlyRate = this.settingsService.monthlyInterestRate() / 100;
       const totalInterest = loan * monthlyRate * tenor;
       const total = Math.round(loan + totalInterest);
       const monthly = Math.round(total / tenor);

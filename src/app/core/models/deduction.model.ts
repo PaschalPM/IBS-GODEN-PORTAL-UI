@@ -39,7 +39,7 @@ export interface PaginationMeta {
 export interface DeductionQueryParams {
   page?: number;
   per_page?: number;
-  search_text?: string;
+  service_number?: string;
   start_date?: string;
   end_date?: string;
 }

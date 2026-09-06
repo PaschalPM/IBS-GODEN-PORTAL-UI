@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Deduction } from '../../../../core/models/deduction.model';
+import { Employee } from '../../../../core/models/employee.model';
 import { DeduktService } from '../../../../core/services/dedukt.service';
 
 @Component({
@@ -64,6 +65,7 @@ import { DeduktService } from '../../../../core/services/dedukt.service';
 })
 export class CancelDeductionModalComponent {
   @Input({ required: true }) deduction!: Deduction;
+  @Input({ required: true }) employee!: Employee;
   @Output() close = new EventEmitter<void>();
   @Output() cancelled = new EventEmitter<void>();
 
@@ -71,10 +73,9 @@ export class CancelDeductionModalComponent {
   isSubmitting = signal(false);
 
   async confirmStoppage() {
-    if (!this.deduction || this.isSubmitting()) return;
+    if (!this.employee || this.isSubmitting()) return;
     this.isSubmitting.set(true);
-    const uuid = this.deduction.uuid || this.deduction.id;
-    const ok = await this.deduktService.stopDeduction(uuid, 'Officer confirmed stoppage request');
+    const ok = await this.deduktService.stopDeduction(this.employee.id, this.employee.companyUuid || '');
     this.isSubmitting.set(false);
     if (ok) {
       this.cancelled.emit();

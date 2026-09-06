@@ -44,12 +44,12 @@ import { PaginationComponent } from '../../../../shared/components/pagination/pa
           <!-- Search Text -->
           <div class="w-full sm:w-80">
             <label class="block text-xs font-semibold text-[#101828] mb-1.5">
-              Search Service Number / Reference
+              Search Service Number
             </label>
-            <input 
-              type="text" 
-              formControlName="searchText" 
-              placeholder="Enter service number or reference"
+            <input
+              type="text"
+              formControlName="serviceNumber"
+              placeholder="Enter service number"
               class="dedukt-input"
             />
           </div>
@@ -221,7 +221,7 @@ export class DeductionsComponent implements OnInit {
   filterForm: FormGroup = this.fb.group({
     startDate: [''],
     endDate: [''],
-    searchText: ['']
+    serviceNumber: ['']
   });
 
   ngOnInit() {
@@ -233,7 +233,7 @@ export class DeductionsComponent implements OnInit {
     this.deduktService.loadDeductions({
       page: this.currentPage(),
       per_page: this.pageSize(),
-      search_text: (formVals.searchText || '').trim(),
+      service_number: (formVals.serviceNumber || '').trim(),
       start_date: formVals.startDate || undefined,
       end_date: formVals.endDate || undefined
     });
@@ -248,7 +248,7 @@ export class DeductionsComponent implements OnInit {
     this.filterForm.reset({
       startDate: '',
       endDate: '',
-      searchText: ''
+      serviceNumber: ''
     });
     this.currentPage.set(1);
     this.fetchDeductions();

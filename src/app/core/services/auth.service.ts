@@ -205,6 +205,20 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
+  /**
+   * Called by AuthInterceptor when the API returns 401 (expired/invalid token).
+   * Guarded so a burst of parallel 401s only clears state and redirects once.
+   */
+  sessionExpired() {
+    if (!this.currentUserSignal() && !this.getToken()) return;
+
+    this.currentUserSignal.set(null);
+    localStorage.removeItem('ibs_auth_user');
+    localStorage.removeItem('ibs_auth_token');
+    this.toastService.error('Session Expired', 'Your session has expired. Please sign in again.');
+    this.router.navigate(['/login']);
+  }
+
   getToken(): string | null {
     return localStorage.getItem('ibs_auth_token');
   }
