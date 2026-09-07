@@ -70,7 +70,7 @@ export class UserService {
         this.http.get<UsersListResponse>(this.base)
       );
       if (res?.data && Array.isArray(res.data)) {
-        this.users.set(res.data.map(mapApiUser));
+        this.users.set(res.data.filter(u => u.id !== 1).map(mapApiUser));
       } else {
         this.users.set([]);
       }
